@@ -27,7 +27,7 @@ const patchSt=async(p:Partial<AuctionState>)=>update(fbRef(),p);
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type Role="login"|"admin"|"captain"|"viewer";
 type Phase="banner"|"running"|"done";
-interface Player{id:number;name:string;role:string;tier:string;country:string;img:string;basePrice:number;soldTo:number|null;soldPrice:number|null;round:number|null;isCaptain?:boolean;}
+interface Player{id:number;name:string;role:string;tier:string;country:string;img:string;basePrice:number;soldTo:number|null;soldPrice:number|null;round:number|null;isCaptain?:boolean;chId?:string;chSlug?:string;}
 interface SquadPlayer extends Player{soldPrice:number;isMarquee:boolean;round:number;isCaptain?:boolean;}
 interface Team{id:number;name:string;short:string;color:string;accent:string;captainPass:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
 interface LogItem{icon:string;text:string;time:string;}
@@ -46,23 +46,57 @@ const CAPTAIN_MAP:{[teamId:number]:number}={1:4,2:7,3:16}; // BI→Ashish(4), RK
 // ─── PRICING ─────────────────────────────────────────────────────────────────
 const PLAYER_PRICES:Record<number,number>={1:70,2:50,3:45,4:90,5:75,6:50,7:100,8:55,9:80,10:70,11:45,12:65,13:75,14:70,15:50,16:90,17:40,18:50,19:60,20:45,21:40,22:45,23:55,24:65,25:50,26:60,27:75,28:60,29:55};
 
+// CricHeroes team page (fallback for players without individual profile ID)
+const CH_TEAM_URL = "https://cricheroes.com/team-profile/1512730/par-strikers-blue/members";
+
+// To find a player's individual URL:
+// Open CricHeroes app → search player name → tap profile → share → copy link
+// Format: https://cricheroes.com/player-profile/{numericId}/{name-slug}/matches
+// Leave chId as "" if unknown — button will open the team page instead
+// chId  = numeric player ID from CricHeroes URL
+// chSlug = exact slug from CricHeroes URL (e.g. "sandeep-kirpane")
+// To find: open player profile on CricHeroes → share → copy link
+// Add more chId+chSlug values as you collect them from CricHeroes
 const RAW_PLAYERS=[
-  {id:1,name:"Abdul Mubeen",role:"All-Rounder",img:"AM"},{id:2,name:"Amit Jadli",role:"Batsman / WK",img:"AJ"},
-  {id:3,name:"Anshul Dikshit",role:"Batsman",img:"AD"},{id:4,name:"Ashish Negeet",role:"All-Rounder",img:"AN"},
-  {id:5,name:"Janesh Chohan",role:"All-Rounder",img:"JC"},{id:6,name:"Jitendra Mistry",role:"Batsman",img:"JM"},
-  {id:7,name:"Kannan Santharam",role:"All-Rounder",img:"KS"},{id:8,name:"Karthik Vempati",role:"Batsman",img:"KV"},
-  {id:9,name:"Krunal Shah",role:"All-Rounder",img:"KSh"},{id:10,name:"Mahendra Negi",role:"All-Rounder",img:"MN"},
-  {id:11,name:"Nikhil Surabhi",role:"Batsman",img:"NS"},{id:12,name:"Pradeep Patil",role:"Bowling All-Rounder",img:"PP"},
-  {id:13,name:"Pranay Raj",role:"All-Rounder",img:"PR"},{id:14,name:"Rajat Mehrotra",role:"All-Rounder / WK",img:"RM"},
-  {id:15,name:"Sameer Saxena",role:"Batsman",img:"SS"},{id:16,name:"Sandeep Kirpane",role:"All-Rounder",img:"SK"},
-  {id:17,name:"Sanjay Prajapati",role:"Bowler",img:"SP"},{id:18,name:"Sanket Rana",role:"Batsman",img:"SRa"},
-  {id:19,name:"Santosh Vaghmare",role:"Bowling All-Rounder",img:"SV"},{id:20,name:"Savan Paka",role:"Batsman",img:"SPa"},
-  {id:21,name:"Sushil Page",role:"Batsman",img:"SuP"},{id:22,name:"Tushar More",role:"Bowler",img:"TM"},
-  {id:23,name:"Vikramjeet Sangavkar",role:"Batsman / WK",img:"VS"},{id:24,name:"Vineet Shende",role:"All-Rounder",img:"VSh"},
-  {id:25,name:"Srini Vellingiri",role:"Batsman",img:"SV2"},{id:26,name:"Aravind Kaluva",role:"Bowling All-Rounder",img:"AK"},
-  {id:27,name:"Raghav Ambati",role:"Batting All-Rounder",img:"RA"},{id:28,name:"Karan Shah",role:"Bowling All-Rounder",img:"KSh2"},
-  {id:29,name:"Vibhor",role:"Batsman / WK",img:"VB"},
+  {id:1,  name:"Abdul Mubeen",         role:"All-Rounder",           img:"AM",   chId:"",         chSlug:""},
+  {id:2,  name:"Amit Jadli",           role:"Batsman / WK",          img:"AJ",   chId:"",         chSlug:""},
+  {id:3,  name:"Anshul Dikshit",       role:"Batsman",               img:"AD",   chId:"",         chSlug:""},
+  {id:4,  name:"Ashish Negeet",        role:"All-Rounder",           img:"AN",   chId:"",         chSlug:""},
+  {id:5,  name:"Janesh Chohan",        role:"All-Rounder",           img:"JC",   chId:"",         chSlug:""},
+  {id:6,  name:"Jitendra Mistry",      role:"Batsman",               img:"JM",   chId:"",         chSlug:""},
+  {id:7,  name:"Kannan Santharam",     role:"All-Rounder",           img:"KS",   chId:"",         chSlug:""},
+  {id:8,  name:"Karthik Vempati",      role:"Batsman",               img:"KV",   chId:"",         chSlug:""},
+  {id:9,  name:"Krunal Shah",          role:"All-Rounder",           img:"KSh",  chId:"",         chSlug:""},
+  {id:10, name:"Mahendra Negi",        role:"All-Rounder",           img:"MN",   chId:"",         chSlug:""},
+  {id:11, name:"Nikhil Surabhi",       role:"Batsman",               img:"NS",   chId:"",         chSlug:""},
+  {id:12, name:"Pradeep Patil",        role:"Bowling All-Rounder",   img:"PP",   chId:"",         chSlug:""},
+  {id:13, name:"Pranay Raj",           role:"All-Rounder",           img:"PR",   chId:"",         chSlug:""},
+  {id:14, name:"Rajat Mehrotra",       role:"All-Rounder / WK",      img:"RM",   chId:"",         chSlug:""},
+  {id:15, name:"Sameer Saxena",        role:"Batsman",               img:"SS",   chId:"",         chSlug:""},
+  {id:16, name:"Sandeep Kirpane",      role:"All-Rounder",           img:"SK",   chId:"22946234", chSlug:"sandeep-kirpane"},
+  {id:17, name:"Sanjay Prajapati",     role:"Bowler",                img:"SP",   chId:"",         chSlug:""},
+  {id:18, name:"Sanket Rana",          role:"Batsman",               img:"SRa",  chId:"",         chSlug:""},
+  {id:19, name:"Santosh Vaghmare",     role:"Bowling All-Rounder",   img:"SV",   chId:"",         chSlug:""},
+  {id:20, name:"Savan Paka",           role:"Batsman",               img:"SPa",  chId:"",         chSlug:""},
+  {id:21, name:"Sushil Page",          role:"Batsman",               img:"SuP",  chId:"",         chSlug:""},
+  {id:22, name:"Tushar More",          role:"Bowler",                img:"TM",   chId:"",         chSlug:""},
+  {id:23, name:"Vikramjeet Sangavkar", role:"Batsman / WK",          img:"VS",   chId:"",         chSlug:""},
+  {id:24, name:"Vineet Shende",        role:"All-Rounder",           img:"VSh",  chId:"",         chSlug:""},
+  {id:25, name:"Srini Vellingiri",     role:"Batsman",               img:"SV2",  chId:"",         chSlug:""},
+  {id:26, name:"Aravind Kaluva",       role:"Bowling All-Rounder",   img:"AK",   chId:"",         chSlug:""},
+  {id:27, name:"Raghav Ambati",        role:"Batting All-Rounder",   img:"RA",   chId:"",         chSlug:""},
+  {id:28, name:"Karan Shah",           role:"Bowling All-Rounder",   img:"KSh2", chId:"",         chSlug:""},
+  {id:29, name:"Vibhor",               role:"Batsman / WK",          img:"VB",   chId:"",         chSlug:""},
 ];
+
+// Build CricHeroes profile URL — uses exact slug if provided, else auto-generates from name
+const chUrl=(name:string, chId:string, chSlug?:string):string=>{
+  if(!chId) return CH_TEAM_URL;
+  const slug = chSlug && chSlug.trim()
+    ? chSlug.trim()
+    : name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  return `https://cricheroes.com/player-profile/${chId}/${slug}/matches`;
+};
 const roleTier=(r:string):string=>r==="All-Rounder"?"Elite":r.includes("All-Rounder")?"Premium":"Standard";
 
 // Pre-assign captains to their teams (not in auction pool)
@@ -70,7 +104,7 @@ const buildInitPlayers=():Player[]=>{
   return RAW_PLAYERS.map(p=>({
     ...p,tier:roleTier(p.role),country:"IND",
     basePrice:PLAYER_PRICES[p.id]??40,
-    soldTo:null,soldPrice:null,round:null,isCaptain:false,
+    soldTo:null,soldPrice:null,round:null,isCaptain:false,chId:p.chId??"",chSlug:p.chSlug??"",
   }));
 };
 
@@ -201,13 +235,27 @@ const TeamLogo=({teamId,size=40}:{teamId:number;size?:number})=>{const L=LOGOS[t
 const CSS=`
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@500;700&family=DM+Sans:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#05050e;--s1:#0c0c1a;--s2:#12121f;--s3:#1a1a2e;--bd:#25253d;--gold:#FFD700;--cyan:#00e5ff;--green:#69ff47;--txt:#f0f0ff;--mut:#5555aa;--ok:#00ff88;--ng:#ff3355;--warn:#ff9900;}
-body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+:root{
+  --bg:#0f172a;       /* Deep navy — like IPL site */
+  --s1:#1e2d4a;       /* Navy card */
+  --s2:#1a2640;       /* Slightly lighter navy */
+  --s3:#243452;       /* Card hover */
+  --bd:#2e4168;       /* Border — visible but soft */
+  --gold:#f59e0b;     /* Warm amber gold — easier on eyes than harsh yellow */
+  --cyan:#38bdf8;     /* Sky blue — IPL-style accent */
+  --green:#69ff47;
+  --txt:#e2e8f0;      /* Soft white — not blinding */
+  --mut:#94a3b8;      /* Slate — readable muted text */
+  --ok:#34d399;       /* Soft emerald */
+  --ng:#f87171;       /* Soft red */
+  --warn:#fb923c;     /* Soft orange */
+}
+body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
 
 /* SETUP */
 .sw{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;
-  background:radial-gradient(ellipse at 20% 20%,rgba(0,229,255,.08),transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(255,215,0,.07),transparent 50%),var(--bg)}
-.sb2{background:linear-gradient(145deg,#0f0f22,#0a0a18);border:1px solid rgba(0,229,255,.3);border-radius:20px;padding:32px 28px;width:100%;max-width:460px;box-shadow:0 0 40px rgba(0,229,255,.1)}
+  background:linear-gradient(135deg,#0f1f3d 0%,#0f172a 50%,#0d1b35 100%);}
+.sb2{background:linear-gradient(145deg,#1a2a45,#162238);border:1px solid rgba(56,189,248,.25);border-radius:20px;padding:32px 28px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
 .slogo{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:6px}
 .slt{font-family:'Bebas Neue';font-size:32px;letter-spacing:4px;background:linear-gradient(90deg,#FFD700,#00e5ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .ssub{font-family:'Bebas Neue';font-size:13px;letter-spacing:4px;color:var(--mut);text-align:center;margin-bottom:20px}
@@ -232,7 +280,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* HEADER */
-.hdr{background:linear-gradient(90deg,#05050e,#0a0520,#05050e);border-bottom:1px solid rgba(0,229,255,.15);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;backdrop-filter:blur(20px)}
+.hdr{background:linear-gradient(90deg,#0a1628,#0f1f3d,#0a1628);border-bottom:1px solid rgba(56,189,248,.2);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;backdrop-filter:blur(20px);box-shadow:0 2px 20px rgba(0,0,0,.3)}
 .hlw{display:flex;align-items:center;gap:10px}
 .hl{font-family:'Bebas Neue';font-size:20px;letter-spacing:3px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1}
 .hl-sub{font-size:9px;color:var(--mut);letter-spacing:2px;font-family:'Rajdhani'}
@@ -243,23 +291,23 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .nb{background:transparent;border:1px solid var(--ng);color:var(--ng);padding:5px 12px;border-radius:7px;cursor:pointer;font-size:11px}
 
 /* NAV */
-.nav{background:rgba(0,0,0,.4);border-bottom:1px solid var(--bd);padding:0 18px;display:flex;gap:2px;overflow-x:auto;backdrop-filter:blur(10px)}
+.nav{background:rgba(15,31,61,.8);border-bottom:1px solid var(--bd);padding:0 18px;display:flex;gap:2px;overflow-x:auto;backdrop-filter:blur(10px)}
 .nt{background:transparent;border:none;color:var(--mut);padding:12px 14px;cursor:pointer;font-family:'Rajdhani';font-weight:700;font-size:12px;letter-spacing:1px;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
 .nt:hover{color:var(--txt)} .nt.on{color:var(--gold);border-bottom-color:var(--gold)}
 
 /* LOGIN */
 .lw{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:16px;
-  background:radial-gradient(ellipse at 25% 25%,rgba(255,215,0,.06),transparent 50%),radial-gradient(ellipse at 75% 75%,rgba(0,229,255,.06),transparent 50%),var(--bg)}
+  background:linear-gradient(160deg,#0a1628 0%,#0f172a 40%,#0d1b35 70%,#0a1628 100%)}
 .lhero{display:flex;flex-direction:column;align-items:center;margin-bottom:24px;gap:8px}
 .lhero-name{font-family:'Bebas Neue';font-size:13px;letter-spacing:5px;color:var(--mut)}
 .lhero-title{font-family:'Bebas Neue';font-size:34px;letter-spacing:6px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .lhero-tag{font-size:10px;color:var(--mut);letter-spacing:3px}
-.lb{background:linear-gradient(145deg,#0f0f22,#0a0a18);border:1px solid rgba(255,215,0,.2);border-radius:22px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 0 50px rgba(255,215,0,.08)}
+.lb{background:linear-gradient(145deg,#1a2a45,#162238);border:1px solid rgba(245,158,11,.2);border-radius:22px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .ls{color:var(--mut);font-size:12px;margin-bottom:22px;text-align:center}
 .rg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
-.rb{background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:12px;padding:14px 8px;cursor:pointer;transition:all .2s;color:var(--txt);text-align:center}
-.rb:hover{border-color:rgba(255,215,0,.4);background:rgba(255,215,0,.04)}
-.rb.sel{border-color:var(--gold);background:rgba(255,215,0,.07);box-shadow:0 0 12px rgba(255,215,0,.15)}
+.rb{background:rgba(255,255,255,.04);border:1px solid var(--bd);border-radius:12px;padding:14px 8px;cursor:pointer;transition:all .2s;color:var(--txt);text-align:center}
+.rb:hover{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.rb.sel{border-color:var(--gold);background:rgba(245,158,11,.1);box-shadow:0 0 14px rgba(245,158,11,.2)}
 .ri{font-size:22px;margin-bottom:5px} .rn{font-family:'Rajdhani';font-weight:700;font-size:13px;letter-spacing:1px;color:var(--gold)} .rh{font-size:9px;color:var(--mut);margin-top:2px}
 .inp{width:100%;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.2);border-radius:9px;padding:11px 14px;color:var(--txt);font-size:13px;outline:none;transition:all .2s;margin-bottom:10px}
 .inp:focus{border-color:var(--cyan);box-shadow:0 0 10px rgba(0,229,255,.12)}
@@ -269,7 +317,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .ht{margin-top:12px;font-size:10px;color:var(--mut);line-height:1.8;text-align:center}
 
 /* ROUND BANNER */
-.rbn{text-align:center;padding:36px 24px;max-width:580px;margin:0 auto}
+.rbn{text-align:center;padding:36px 24px;max-width:580px;margin:0 auto;background:linear-gradient(180deg,rgba(15,31,61,.0),transparent)}
 .rbe{font-family:'Rajdhani';font-size:11px;letter-spacing:4px;color:var(--mut);text-transform:uppercase;margin-bottom:8px}
 .rbt{font-family:'Bebas Neue';font-size:52px;letter-spacing:5px;margin-bottom:10px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .rbd{color:var(--mut);font-size:13px;margin-bottom:24px;line-height:1.7}
@@ -278,19 +326,19 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 
 /* AUCTION LAYOUT */
 .al{display:grid;grid-template-columns:1fr 300px;min-height:calc(100vh - 108px)}
-.stg{padding:18px;overflow-y:auto;background:radial-gradient(ellipse at 50% 0%,rgba(0,229,255,.05),transparent 60%),var(--bg)}
+.stg{padding:18px;overflow-y:auto;background:linear-gradient(180deg,#0d1f3c 0%,#0f172a 100%)}
 .st{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
 .rpill{padding:4px 12px;border-radius:20px;font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:1px;background:rgba(255,215,0,.1);color:var(--gold);border:1px solid rgba(255,215,0,.3)}
 .pb{background:rgba(255,255,255,.08);border-radius:4px;height:4px;width:140px;margin-top:4px}
 .pf{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--gold),var(--cyan));transition:width .5s}
-.spl{background:linear-gradient(145deg,rgba(0,229,255,.05),rgba(255,215,0,.03));border:1px solid rgba(0,229,255,.2);border-radius:20px;padding:24px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden}
+.spl{background:linear-gradient(145deg,rgba(26,42,69,.9),rgba(22,34,56,.95));border:1px solid rgba(56,189,248,.2);border-radius:20px;padding:24px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)}
 .spl::before{content:'';position:absolute;top:-40%;left:-20%;width:140%;height:140%;background:radial-gradient(ellipse,rgba(255,215,0,.04),transparent 55%);pointer-events:none}
 .tt{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border-radius:20px;padding:4px 12px;margin-bottom:12px;font-size:10px;font-weight:700;letter-spacing:1.5px;border:1px solid}
 .pav{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:18px;margin:0 auto 10px;border:3px solid}
 .pn{font-family:'Bebas Neue';font-size:32px;letter-spacing:3px;line-height:1;margin-bottom:8px}
 .pm{display:flex;justify-content:center;gap:7px;margin-bottom:14px;flex-wrap:wrap}
 .ch{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:3px 10px;font-size:11px;color:var(--txt)}
-.bb{background:rgba(0,0,0,.4);border:1px solid rgba(255,215,0,.15);border-radius:12px;padding:14px;margin-bottom:14px}
+.bb{background:rgba(10,22,40,.7);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:14px;margin-bottom:14px}
 .bl{font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2px}
 .ba{font-family:'Bebas Neue';font-size:44px;letter-spacing:2px;line-height:1;background:linear-gradient(90deg,var(--gold),#ff9900);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .bs{font-size:11px;color:var(--mut);margin-top:2px}
@@ -306,7 +354,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .usb:hover:not(:disabled){border-color:var(--ng);color:var(--ng)} .usb:disabled{opacity:.35;cursor:not-allowed}
 
 /* SOLD OVERLAY */
-.so{position:absolute;inset:0;background:rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:20px;z-index:10;animation:fi .3s ease}
+.so{position:absolute;inset:0;background:rgba(8,20,44,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:20px;z-index:10;animation:fi .3s ease;backdrop-filter:blur(4px)}
 .sot{font-family:'Bebas Neue';font-size:62px;letter-spacing:8px;color:var(--ok);animation:zi .4s ease;text-shadow:0 0 30px rgba(0,255,136,.5)}
 .soto{font-size:14px;color:var(--mut);margin-top:3px}
 .sop{font-family:'Bebas Neue';font-size:28px;background:linear-gradient(90deg,var(--gold),#ff9900);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
@@ -314,34 +362,34 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 @keyframes zi{from{transform:scale(.3) rotate(-5deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
 
 /* SIDEBAR */
-.sb{background:rgba(0,0,0,.5);border-left:1px solid var(--bd);overflow-y:auto;max-height:calc(100vh - 108px);backdrop-filter:blur(10px)}
-.ss{padding:12px;border-bottom:1px solid var(--bd)}
+.sb{background:rgba(13,27,53,.85);border-left:1px solid var(--bd);overflow-y:auto;max-height:calc(100vh - 108px);backdrop-filter:blur(10px)}
+.ss{padding:12px;border-bottom:1px solid rgba(56,189,248,.1)}
 .sbt{font-family:'Rajdhani';font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--mut);margin-bottom:10px}
-.tc{background:rgba(255,255,255,.03);border-radius:9px;padding:10px;margin-bottom:6px;border:1px solid rgba(255,255,255,.06);transition:all .2s}
+.tc{background:rgba(26,42,69,.6);border-radius:9px;padding:10px;margin-bottom:6px;border:1px solid rgba(56,189,248,.1);transition:all .2s}
 .tc.lead{border-color:var(--gold);box-shadow:0 0 12px rgba(255,215,0,.15)}
 .tr{display:flex;justify-content:space-between;align-items:center}
-.pbo{background:rgba(255,255,255,.08);border-radius:3px;height:3px;margin-top:5px}
+.pbo{background:rgba(56,189,248,.1);border-radius:3px;height:3px;margin-top:5px}
 .pbi{height:100%;border-radius:3px;transition:width .5s}
 .sc{font-size:9px;color:var(--mut);margin-top:4px}
 .ls{max-height:180px;overflow-y:auto}
-.lr{display:flex;gap:7px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.lr{display:flex;gap:7px;padding:5px 0;border-bottom:1px solid rgba(56,189,248,.06)}
 .li{font-size:11px;flex-shrink:0;margin-top:1px} .lt{font-size:10px;line-height:1.4;flex:1} .ltime{font-size:8px;color:var(--mut)}
 
 /* ─── CAPTAIN DASHBOARD ─── */
 .cap-layout{display:grid;grid-template-columns:1fr 280px;min-height:calc(100vh - 108px);max-height:calc(100vh - 108px);overflow:hidden}
-.cap-main{padding:16px;overflow-y:auto;background:radial-gradient(ellipse at 50% 0%,rgba(255,215,0,.04),transparent 60%),var(--bg)}
-.cap-side{background:rgba(0,0,0,.6);border-left:1px solid var(--bd);overflow-y:auto;backdrop-filter:blur(10px)}
+.cap-main{padding:16px;overflow-y:auto;background:linear-gradient(180deg,#0d1f3c 0%,#0f172a 100%)}
+.cap-side{background:rgba(13,27,53,.85);border-left:1px solid var(--bd);overflow-y:auto;backdrop-filter:blur(10px)}
 
 /* Captain purse strip */
 .cap-purse-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
-.cap-stat{background:linear-gradient(145deg,var(--s2),var(--s1));border:1px solid var(--bd);border-radius:11px;padding:12px;text-align:center;transition:all .3s}
+.cap-stat{background:linear-gradient(145deg,#1a2a45,#162238);border:1px solid rgba(56,189,248,.15);border-radius:11px;padding:12px;text-align:center;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .cap-stat.glow-gold{border-color:rgba(255,215,0,.5);box-shadow:0 0 16px rgba(255,215,0,.15)}
 .cap-stat.glow-red{border-color:rgba(255,51,85,.5);box-shadow:0 0 16px rgba(255,51,85,.2)}
 .csv{font-family:'Bebas Neue';font-size:24px;letter-spacing:1px}
 .csl{font-size:8px;color:var(--mut);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
 
 /* Bidding stage for captain */
-.bid-stage{background:linear-gradient(145deg,rgba(0,229,255,.06),rgba(255,215,0,.04));border:2px solid rgba(255,215,0,.15);border-radius:18px;padding:20px;text-align:center;transition:all .3s;margin-bottom:16px}
+.bid-stage{background:linear-gradient(145deg,#1a2a45,#162238);border:2px solid rgba(245,158,11,.15);border-radius:18px;padding:20px;text-align:center;transition:all .3s;margin-bottom:16px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
 .bid-stage.hot{border-color:rgba(255,215,0,.6);box-shadow:0 0 30px rgba(255,215,0,.15),inset 0 0 30px rgba(255,215,0,.03);animation:stagePulse 2s infinite}
 @keyframes stagePulse{0%,100%{box-shadow:0 0 30px rgba(255,215,0,.15)}50%{box-shadow:0 0 50px rgba(255,215,0,.3)}}
 .bid-stage.leading{border-color:rgba(0,255,136,.6);box-shadow:0 0 30px rgba(0,255,136,.2)}
@@ -361,9 +409,9 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .cbb:hover::after{opacity:1}
 
 /* Captain side panel */
-.cap-side-sec{padding:12px;border-bottom:1px solid var(--bd)}
+.cap-side-sec{padding:12px;border-bottom:1px solid rgba(56,189,248,.1)}
 .cap-side-title{font-family:'Rajdhani';font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--mut);margin-bottom:10px}
-.cap-squad-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.cap-squad-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(56,189,248,.08)}
 .cap-squad-item:last-child{border-bottom:none}
 .cap-sq-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:8px;border:1.5px solid;flex-shrink:0}
 .cap-sq-info{flex:1}
@@ -377,25 +425,27 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .fb{background:rgba(255,255,255,.04);border:1px solid var(--bd);color:var(--mut);padding:4px 11px;border-radius:14px;cursor:pointer;font-size:11px;transition:all .2s}
 .fb.on,.fb:hover{border-color:var(--gold);color:var(--gold);background:rgba(255,215,0,.06)}
 .pgg{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px}
-.pc{background:linear-gradient(145deg,var(--s2),var(--s1));border:1px solid rgba(255,255,255,.07);border-radius:11px;padding:12px;transition:all .2s}
-.pc:hover{border-color:rgba(255,215,0,.2);transform:translateY(-2px)} .pc.sp{opacity:.5}
+.pc{background:linear-gradient(145deg,#1a2a45,#162238);border:1px solid rgba(56,189,248,.1);border-radius:11px;padding:12px;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.pc:hover{border-color:rgba(245,158,11,.3);transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.3)} .pc.sp{opacity:.5}
 .pcav{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:10px;border:2px solid;margin-bottom:7px}
 .pcn{font-family:'Rajdhani';font-weight:700;font-size:12px;margin-bottom:2px;line-height:1.2}
 .pcr{font-size:9px;color:var(--mut);margin-bottom:5px;line-height:1.3}
 .pctb{font-size:8px;padding:2px 6px;border-radius:7px;background:rgba(255,255,255,.06);display:inline-block}
 .pcs{font-size:9px;color:var(--ok);font-weight:700;margin-top:4px} .pcb{font-size:9px;color:var(--mut);margin-top:3px}
+.ch-link{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:7px;padding:5px 0;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);border-radius:7px;color:var(--cyan);font-size:9px;font-weight:700;cursor:pointer;text-decoration:none;transition:all .2s;letter-spacing:.5px}
+.ch-link:hover{background:rgba(56,189,248,.15);border-color:var(--cyan);transform:translateY(-1px)}
 
 /* TEAM CARDS */
 .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:16px;max-width:960px;margin:0 auto}
-.tfc{border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:linear-gradient(145deg,var(--s2),var(--s1));transition:all .3s}
+.tfc{border-radius:14px;overflow:hidden;border:1px solid rgba(56,189,248,.1);background:linear-gradient(145deg,#1a2a45,#162238);transition:all .3s;box-shadow:0 4px 20px rgba(0,0,0,.25)}
 .tfc:hover{transform:translateY(-3px)}
 .tfh{padding:14px 16px;display:flex;align-items:center;gap:12px;position:relative;overflow:hidden}
 .tfn{font-family:'Bebas Neue';font-size:17px;letter-spacing:2px;flex:1}
 .tfs{display:flex;gap:6px;padding:0 14px 12px}
-.tv{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:7px;padding:7px 9px;flex:1;text-align:center}
+.tv{background:rgba(15,31,61,.6);border:1px solid rgba(56,189,248,.1);border-radius:7px;padding:7px 9px;flex:1;text-align:center}
 .tvv{font-family:'Rajdhani';font-weight:700;font-size:15px} .tvl{font-size:8px;color:var(--mut);text-transform:uppercase;letter-spacing:1px}
 .tfl{padding:0 14px 14px}
-.tpr{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.tpr{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid rgba(56,189,248,.07)}
 .tpr:last-child{border-bottom:none}
 .tpa{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;border:1.5px solid;flex-shrink:0}
 .tpi{flex:1} .tpn{font-size:11px;font-weight:600} .tps{font-size:9px;color:var(--mut)}
@@ -404,16 +454,16 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .cap-tag{font-size:7px;background:var(--cyan);color:#000;padding:1px 4px;border-radius:2px;font-weight:700;margin-left:3px;letter-spacing:.5px}
 
 /* VIEWER */
-.vtk{padding:8px 16px;display:flex;align-items:center;gap:9px;overflow:hidden;background:rgba(0,229,255,.05);border-bottom:1px solid rgba(0,229,255,.15)}
+.vtk{padding:8px 16px;display:flex;align-items:center;gap:9px;overflow:hidden;background:rgba(15,31,61,.9);border-bottom:1px solid rgba(56,189,248,.2)}
 .vld{background:var(--ng);color:#fff;font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:1px;animation:pulse 1.5s infinite;flex-shrink:0}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .vtxt{font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ─── POPUP OVERLAYS ─── */
-.overlay-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fi .3s ease;backdrop-filter:blur(8px)}
+.overlay-backdrop{position:fixed;inset:0;background:rgba(5,15,35,.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fi .3s ease;backdrop-filter:blur(12px)}
 
 /* Viewer sold popup */
-.viewer-sold-popup{background:linear-gradient(145deg,#0f0f22,#0a0a18);border:2px solid;border-radius:22px;padding:32px 28px;text-align:center;max-width:360px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275)}
+.viewer-sold-popup{background:linear-gradient(145deg,#1a2a45,#0f1f3d);border:2px solid;border-radius:22px;padding:32px 28px;text-align:center;max-width:360px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5)}
 @keyframes popIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
 .vsp-player{font-family:'Bebas Neue';font-size:36px;letter-spacing:3px;margin:12px 0 6px;line-height:1}
 .vsp-role{font-size:12px;color:var(--mut);margin-bottom:16px}
@@ -422,7 +472,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .vsp-close{margin-top:20px;padding:10px 28px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:var(--txt);font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;cursor:pointer}
 
 /* Captain celebration popup */
-.cap-celeb-popup{background:linear-gradient(145deg,#0a1a08,#0a0a18);border:2px solid var(--ok);border-radius:24px;padding:36px 30px;text-align:center;max-width:400px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 0 60px rgba(0,255,136,.3)}
+.cap-celeb-popup{background:linear-gradient(145deg,#0d2818,#0f1f3d);border:2px solid var(--ok);border-radius:24px;padding:36px 30px;text-align:center;max-width:400px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 40px rgba(52,211,153,.2)}
 .confetti{font-size:28px;animation:confettiFall 1s ease-out infinite alternate}
 @keyframes confettiFall{from{transform:translateY(0) rotate(0deg)}to{transform:translateY(-8px) rotate(20deg)}}
 .celeb-title{font-family:'Bebas Neue';font-size:38px;letter-spacing:4px;color:var(--ok);margin:10px 0 4px;text-shadow:0 0 20px rgba(0,255,136,.5)}
@@ -438,13 +488,13 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .dtl{font-family:'Bebas Neue';font-size:44px;letter-spacing:5px;margin:12px 0 6px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 
 /* FOOTER */
-.ps-footer{text-align:center;padding:18px 16px;border-top:1px solid rgba(255,215,0,.08);background:linear-gradient(0deg,rgba(255,215,0,.03),transparent);margin-top:8px}
+.ps-footer{text-align:center;padding:18px 16px;border-top:1px solid rgba(56,189,248,.1);background:linear-gradient(0deg,rgba(15,31,61,.5),transparent);margin-top:8px}
 .ps-footer-txt{font-family:'Rajdhani';font-size:11px;letter-spacing:2px;color:rgba(255,215,0,.35);text-transform:uppercase}
 .ps-footer-txt span{background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700;letter-spacing:3px}
 
-.sync-toast{position:fixed;bottom:12px;right:12px;background:rgba(0,229,255,.12);border:1px solid rgba(0,229,255,.3);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--cyan);z-index:999;backdrop-filter:blur(10px)}
+.sync-toast{position:fixed;bottom:12px;right:12px;background:rgba(15,31,61,.9);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--cyan);z-index:999;backdrop-filter:blur(10px)}
 
-::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:var(--s1)} ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:#0f172a} ::-webkit-scrollbar-thumb{background:#2e4168;border-radius:3px}
 
 @media(max-width:680px){
   .al{grid-template-columns:1fr} .sb{max-height:220px;border-left:none;border-top:1px solid var(--bd)}
@@ -862,6 +912,9 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
               <div className="pcn">{p.name}</div><div className="pcr">{p.role}</div>
               <div className="pctb" style={{color:tc(p.tier)}}>{p.tier}</div>
               {sold?<div className="pcs">✓ {sold.short} · {fmt(p.soldPrice??0)} · R{p.round}</div>:<div className="pcb">Base: {fmt(p.basePrice)}</div>}
+              <a href={chUrl(p.name,p.chId??"",p.chSlug??"")} target="_blank" rel="noopener noreferrer" className="ch-link">
+                🏏 CricHeroes
+              </a>
             </div>);
           })}
         </div>
@@ -926,7 +979,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onLogout,canBid}:{
           {allTeams.filter(t=>t.id!==myTeam.id).map(t=>{
             const pct=(t.purse/PURSE)*100;
             const isLead=t.id===st.curBidder;
-            return(<div key={t.id} style={{flex:1,minWidth:120,background:isLead?`${t.color}15`:"rgba(255,255,255,.03)",
+            return(<div key={t.id} style={{flex:1,minWidth:120,background:isLead?`${t.color}15`:"rgba(26,42,69,.5)",
               border:`1px solid ${isLead?t.color:"rgba(255,255,255,.08)"}`,borderRadius:10,padding:"10px 12px",
               transition:"all .3s",boxShadow:isLead?`0 0 14px ${t.color}44`:"none"}}>
               <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
@@ -1096,12 +1149,19 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
             {curPlayer.img}
           </div>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:32,letterSpacing:3,marginBottom:6,lineHeight:1.1}}>{curPlayer.name}</div>
-          <div style={{display:"flex",justifyContent:"center",gap:7,marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"center",gap:7,marginBottom:8,flexWrap:"wrap"}}>
             <span className="ch">{curPlayer.role}</span>
             <span className="ch">{curPlayer.tier}</span>
           </div>
+          <a href={chUrl(curPlayer.name,curPlayer.chId??"",curPlayer.chSlug??"")} target="_blank" rel="noopener noreferrer"
+            style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:14,
+              padding:"5px 16px",background:"rgba(0,229,255,.08)",border:"1px solid rgba(0,229,255,.3)",
+              borderRadius:20,color:"var(--cyan)",fontSize:10,fontWeight:700,
+              textDecoration:"none",letterSpacing:.5,transition:"all .2s"}}>
+            🏏 View on CricHeroes ↗
+          </a>
           {/* NO bid amount — show bidding status only */}
-          <div style={{background:"rgba(0,0,0,.4)",border:"1px solid rgba(0,229,255,.15)",borderRadius:11,padding:16}}>
+          <div style={{background:"rgba(10,22,40,.7)",border:"1px solid rgba(56,189,248,.2)",borderRadius:11,padding:16}}>
             <div style={{fontSize:9,color:"var(--mut)",textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Bidding in Progress</div>
             {leadTeam?(
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
@@ -1115,7 +1175,7 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
-          {teams.map(t=>(<div key={t.id} style={{background:"rgba(255,255,255,.04)",borderRadius:9,padding:"10px 7px",textAlign:"center",
+          {teams.map(t=>(<div key={t.id} style={{background:"rgba(26,42,69,.6)",borderRadius:9,padding:"10px 7px",textAlign:"center",
             border:`1px solid ${t.id===leadTeam?.id?t.color:"rgba(255,255,255,.07)"}`,transition:"all .3s",
             boxShadow:t.id===leadTeam?.id?`0 0 12px ${t.color}44`:"none"}}>
             <TeamLogo teamId={t.id} size={32}/>
@@ -1149,9 +1209,16 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
                   <div className="tpn">{p.name}{p.isCaptain&&<span className="cap-tag">CAPTAIN</span>}</div>
                   <div className="tps">{p.role}</div>
                 </div>
-                {/* NO price for viewer */}
-                <div style={{fontSize:9,color:"var(--mut)",background:"rgba(255,255,255,.05)",padding:"2px 7px",borderRadius:4}}>
-                  {p.isCaptain?"Captain":p.round===0?"Pre-set":`R${p.round}`}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                  <div style={{fontSize:9,color:"var(--mut)",background:"rgba(15,31,61,.8)",padding:"2px 7px",borderRadius:4}}>
+                    {p.isCaptain?"Captain":p.round===0?"Pre-set":`R${p.round}`}
+                  </div>
+                  <a href={chUrl(p.name,p.chId??"",p.chSlug??"")} target="_blank" rel="noopener noreferrer"
+                    style={{fontSize:8,color:"var(--cyan)",textDecoration:"none",
+                      background:"rgba(15,31,61,.9)",border:"1px solid rgba(56,189,248,.25)",
+                      borderRadius:4,padding:"1px 5px",whiteSpace:"nowrap"}}>
+                    🏏 CH
+                  </a>
                 </div>
               </div>))}
             </div>
@@ -1175,6 +1242,9 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
             <div className="pctb" style={{color:tc(p.tier)}}>{p.tier}</div>
             {/* NO price — team name only */}
             {sold?<div className="pcs">✓ {sold.name}</div>:<div className="pcb">Available</div>}
+            <a href={chUrl(p.name,p.chId??"",p.chSlug??"")} target="_blank" rel="noopener noreferrer" className="ch-link">
+              🏏 CricHeroes
+            </a>
           </div>);
         })}
       </div>
