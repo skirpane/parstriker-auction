@@ -8,10 +8,27 @@ interface FBConfig {
   apiKey: string; authDomain: string; databaseURL: string;
   projectId: string; storageBucket: string; messagingSenderId: string; appId: string;
 }
-const FB_STORE_KEY = "ps_fb_config_v2";
+const FB_STORE_KEY = "ps_fb_config_v3";
+// Pre-filled config — only messagingSenderId must be entered by user
+const PREFILLED_CONFIG: Partial<FBConfig> = {
+  apiKey:        "AIzaSyD3k2c_0oX3C3f1nAqDRYidKYNCGJgF7I4",
+  authDomain:    "parstriker-auction.firebaseapp.com",
+  databaseURL:   "https://parstriker-auction-default-rtdb.firebaseio.com",
+  projectId:     "parstriker-auction",
+  storageBucket: "parstriker-auction.firebasestorage.app",
+  appId:         "1:1400458016:web:b19f0b8d854f5a9df02545",
+};
+
 const loadSavedConfig = (): FBConfig | null => {
-  try { const r = localStorage.getItem(FB_STORE_KEY); return r ? JSON.parse(r) as FBConfig : null; }
-  catch { return null; }
+  try {
+    const r = localStorage.getItem(FB_STORE_KEY);
+    if (r) {
+      const saved = JSON.parse(r) as FBConfig;
+      // Merge with prefilled in case user has old saved config without new fields
+      return { ...PREFILLED_CONFIG, ...saved } as FBConfig;
+    }
+    return null;
+  } catch { return null; }
 };
 const saveConfig = (c: FBConfig) => { try { localStorage.setItem(FB_STORE_KEY, JSON.stringify(c)); } catch {} };
 let _app: FirebaseApp | null = null;
@@ -429,6 +446,17 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 ::-webkit-scrollbar-track{background:var(--s1)}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 
+/* FOOTER */
+.ps-footer{text-align:center;padding:18px 16px;margin-top:auto;
+  border-top:1px solid rgba(255,215,0,.08);
+  background:linear-gradient(0deg,rgba(255,215,0,.03),transparent)}
+.ps-footer-txt{font-family:'Rajdhani';font-size:11px;letter-spacing:2px;
+  color:rgba(255,215,0,.35);text-transform:uppercase}
+.ps-footer-txt span{
+  background:linear-gradient(90deg,var(--gold),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  font-weight:700;letter-spacing:3px}
+
 @media(max-width:680px){
   .al{grid-template-columns:1fr}
   .sb{max-height:220px;border-left:none;border-top:1px solid var(--bd)}
@@ -639,45 +667,73 @@ export default function App() {
 
 // ─── FIREBASE SETUP ───────────────────────────────────────────────────────────
 function FirebaseSetup({ onSave }: { onSave: (c: FBConfig) => void }) {
-  const [f, setF] = useState<FBConfig>({ apiKey:"",authDomain:"",databaseURL:"",projectId:"",storageBucket:"",messagingSenderId:"",appId:"" });
+  const [senderId, setSenderId] = useState("");
   const [err, setErr] = useState("");
-  const fields: Array<{k: keyof FBConfig; lbl: string; ph: string}> = [
-    {k:"apiKey",            lbl:"API Key",             ph:"AIzaSy..."},
-    {k:"authDomain",        lbl:"Auth Domain",         ph:"xxx.firebaseapp.com"},
-    {k:"databaseURL",       lbl:"Database URL ⚠️",     ph:"https://xxx-default-rtdb.firebaseio.com"},
-    {k:"projectId",         lbl:"Project ID",          ph:"your-project-id"},
-    {k:"storageBucket",     lbl:"Storage Bucket",      ph:"xxx.appspot.com"},
-    {k:"messagingSenderId", lbl:"Messaging Sender ID", ph:"123456789"},
-    {k:"appId",             lbl:"App ID",              ph:"1:123...:web:abc"},
-  ];
+
   const save = () => {
     setErr("");
-    for (const f2 of fields) if (!f[f2.k].trim()) { setErr(`Fill in: ${f2.lbl}`); return; }
-    if (!f.databaseURL.startsWith("https://")) { setErr("Database URL must start with https://"); return; }
-    onSave(f);
+    const id = senderId.trim();
+    if (!id) { setErr("Please enter the Messaging Sender ID"); return; }
+    if (!/^\d+$/.test(id)) { setErr("Messaging Sender ID should be numbers only"); return; }
+    const cfg: FBConfig = {
+      ...(PREFILLED_CONFIG as FBConfig),
+      messagingSenderId: id,
+    };
+    onSave(cfg);
   };
+
   return (
     <div className="setup-wrap">
       <div className="setup-box">
-        <div style={{textAlign:"center",marginBottom:20}}>
+        <div style={{textAlign:"center",marginBottom:22}}>
           <div className="setup-logo">🏏 PARSTRIKER</div>
-          <div className="setup-sub">FIREBASE SETUP</div>
+          <div className="setup-sub">ONE-TIME SETUP</div>
         </div>
-        <div className="setup-desc">
-          One-time setup per device.<br/>
-          Go to <b>console.firebase.google.com</b> → ⚙️ Project Settings → Your apps → &lt;/&gt; Web → copy config
+
+        {/* Masked pre-filled fields */}
+        <div style={{background:"rgba(0,229,255,.04)",border:"1px solid rgba(0,229,255,.12)",
+          borderRadius:12,padding:"14px 16px",marginBottom:18}}>
+          <div style={{fontSize:9,color:"var(--cyan)",textTransform:"uppercase",
+            letterSpacing:1.5,marginBottom:10,fontWeight:700}}>✅ Pre-configured fields</div>
+          {[
+            ["Project",  "parstriker-auction"],
+            ["Database", "parstriker-auction-default-rtdb"],
+            ["Region",   "us-central1"],
+            ["API Key",  "AIzaSyD3k2•••••••••••F7I4"],
+            ["App ID",   "1:140•••••:web:b19f•••••45"],
+          ].map(([lbl,val]) => (
+            <div key={lbl} style={{display:"flex",justifyContent:"space-between",
+              alignItems:"center",marginBottom:6}}>
+              <span style={{fontSize:10,color:"var(--mut)"}}>{lbl}</span>
+              <span style={{fontSize:10,color:"var(--txt)",fontFamily:"monospace",
+                background:"rgba(255,255,255,.06)",padding:"2px 7px",borderRadius:4}}>{val}</span>
+            </div>
+          ))}
         </div>
+
+        {/* Only field user needs to enter */}
+        <div className="setup-desc" style={{marginBottom:16}}>
+          Enter your <b>Messaging Sender ID</b> to complete setup.<br/>
+          Find it in Firebase Console → ⚙️ Project Settings → General → Project number
+        </div>
+
         {err && <div className="setup-err">⚠ {err}</div>}
-        {fields.map(({k,lbl,ph}) => (
-          <div key={k} className="setup-field">
-            <label className="setup-lbl">{lbl}</label>
-            <input className="setup-inp" placeholder={ph} value={f[k]}
-              onChange={e => setF(p=>({...p,[k]:e.target.value.trim()}))} />
-          </div>
-        ))}
+
+        <div className="setup-field">
+          <label className="setup-lbl">Messaging Sender ID</label>
+          <input className="setup-inp"
+            placeholder="e.g. 1400458016"
+            value={senderId}
+            onChange={e => setSenderId(e.target.value.trim())}
+            onKeyDown={e => e.key === "Enter" && save()}
+            style={{fontSize:16,letterSpacing:1,textAlign:"center"}}
+            autoFocus
+          />
+        </div>
+
         <button className="setup-btn" onClick={save}>🔥 CONNECT &amp; LAUNCH</button>
         <div style={{marginTop:12,fontSize:10,color:"var(--mut)",textAlign:"center",lineHeight:1.7}}>
-          Config saved in browser · Each device enters once
+          Saved in browser · Enter once per device
         </div>
       </div>
     </div>
@@ -714,17 +770,17 @@ function LoginScreen({ teams, onLogin }: { teams: Team[]; onLogin: (r:Role,tid?:
         {err && <div className="em">⚠ {err}</div>}
         {sel && sel!=="viewer" && (
           <input className="inp" type="password"
-            placeholder={sel==="admin"?"Admin password":"Captain password e.g. ashish123"}
+            placeholder={sel==="admin"?"Admin password":"Captain password"}
             value={pass} onChange={e=>setPass(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&tryLogin()} />
         )}
         {sel==="viewer" && <div style={{fontSize:11,color:"var(--mut)",marginBottom:10}}>No password needed</div>}
         <button className="gb" disabled={!sel} onClick={tryLogin}>ENTER</button>
         <div className="ht">
-          Admin: <b>admin123</b><br/>
-          Captains: <b>ashish123</b> · <b>kannan123</b> · <b>sandeep123</b>
+          Contact the auction organiser for your password
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
@@ -923,6 +979,7 @@ function AdminView({ st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnso
       )}
 
       {tab==="teams"&&<div className="tgrid"><TeamCards teams={teams}/></div>}
+      <Footer />
     </div>
   );
 }
@@ -1073,6 +1130,7 @@ function CaptainView({ myTeam,st,curPlayer,onBid,onLogout,canBid }:{
             ))}
         </div>
       )}
+      <Footer />
     </div>
   );
 }
@@ -1200,6 +1258,7 @@ function ViewerView({ st,curPlayer,leadTeam,soldCount,onLogout }:{
           </div>
         </div>
       )}
+      <Footer />
     </div>
   );
 }
@@ -1271,6 +1330,18 @@ function DoneScreen({ teams }: { teams: Team[] }) {
         <p style={{color:"var(--mut)",marginBottom:32}}>All {TOTAL_ROUNDS} rounds done · Final squads locked!</p>
       </div>
       <div className="tgrid"><TeamCards teams={teams}/></div>
+      <Footer />
+    </div>
+  );
+}
+
+// ─── FOOTER ───────────────────────────────────────────────────────────────────
+function Footer() {
+  return (
+    <div className="ps-footer">
+      <div className="ps-footer-txt">
+        © 2025 <span>SKIRPANE</span> · All Rights Reserved
+      </div>
     </div>
   );
 }
