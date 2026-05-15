@@ -19,7 +19,7 @@ const saveCfg=(c:FBConfig)=>{try{localStorage.setItem(FB_STORE_KEY,JSON.stringif
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v7");
+const fbRef=()=>ref(getDb(),"psAuction_v8");
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
 const patchSt=async(p:Partial<AuctionState>)=>update(fbRef(),p);
@@ -31,13 +31,13 @@ interface Player{id:number;name:string;role:string;tier:string;country:string;im
 interface SquadPlayer extends Player{soldPrice:number;isMarquee:boolean;round:number;isCaptain?:boolean;}
 interface Team{id:number;name:string;short:string;color:string;accent:string;captainPass:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
 interface LogItem{icon:string;text:string;time:string;}
-interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;}
+interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];}
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=800; const MIN_BID=5; const MAX_SQUAD=11; const MAX_MARQUEE=9;
-const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=7;
+const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=8;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
-const fmt=(v:number):string=>v>=100?`₹${(v/100).toFixed(1)}Cr`:`₹${v}L`;
+const fmt=(v:number):string=>`$${v}`;
 const tc=(t:string):string=>({Elite:"#FFD700",Premium:"#00e5ff",Standard:"#69ff47"}[t]??"#aaa");
 
 // ─── CAPTAIN PLAYER IDs ───────────────────────────────────────────────────────
@@ -52,36 +52,36 @@ const PLAYER_PRICES:Record<number,number>={1:70,2:50,3:45,4:90,5:75,6:50,7:100,8
 // Leave "" if not known — the 🏏 button simply won't show for that player.
 // Example: "https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"
 const RAW_PLAYERS=[
-  {id:1,  name:"Abdul Mubeen",         role:"All-Rounder",           img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
-  {id:2,  name:"Amit Jadli",           role:"Batsman / WK",          img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
-  {id:3,  name:"Anshul Dikshit",       role:"Batsman",               img:"AD",   chUrl:"https://cricheroes.com/player-profile/29553371/anshul-dikshit/matches"},
-  {id:4,  name:"Ashish Nageet",        role:"All-Rounder",           img:"AN",   chUrl:"https://cricheroes.com/player-profile/9793757/ashish-nageet/matches"},
-  {id:5,  name:"Janesh Chohan",        role:"All-Rounder",           img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
-  {id:6,  name:"Jitendra Mistry",      role:"Batsman",               img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
-  {id:7,  name:"Kannan Santharam",     role:"All-Rounder",           img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
-  {id:8,  name:"Karthik Vempati",      role:"Batsman",               img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
-  {id:9,  name:"Krunal Shah",          role:"All-Rounder",           img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
-  {id:10, name:"Mahendra Negi",        role:"All-Rounder",           img:"MN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
-  {id:11, name:"Nikhil Surabhi",       role:"Batsman",               img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
-  {id:12, name:"Pradeep Patil",        role:"Bowling All-Rounder",   img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
-  {id:13, name:"Pranay Raj",           role:"All-Rounder",           img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
-  {id:14, name:"Rajat Mehrotra",       role:"All-Rounder / WK",      img:"RM",   chUrl:"https://cricheroes.com/player-profile/9755522/rajat-mehrotra/matches"},
-  {id:15, name:"Sameer Saxena",        role:"Batsman",               img:"SS",   chUrl:"https://cricheroes.com/player-profile/9670658/sameer-saxena/matches"},
-  {id:16, name:"Sandeep Kirpane",      role:"All-Rounder",           img:"SK",   chUrl:"https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"},
-  {id:17, name:"Sanjay Prajapati",     role:"Bowler",                img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
-  {id:18, name:"Sanket Rana",          role:"Batsman",               img:"SRa",  chUrl:"https://cricheroes.com/player-profile/29553267/sanket-rana/matches"},
-  {id:19, name:"Santosh Vaghmare",     role:"Bowling All-Rounder",   img:"SV",   chUrl:"https://cricheroes.com/player-profile/15997501/santosh-waghmare/matches"},
-  {id:20, name:"Savan Paka",           role:"Batsman",               img:"SPa",  chUrl:"https://cricheroes.com/player-profile/7984823/savan/matches"},
-  {id:21, name:"Sushil Page",          role:"Batsman",               img:"SuP",  chUrl:"https://cricheroes.com/player-profile/30241439/sushil-page/matches"},
-  {id:22, name:"Tushar More",          role:"Bowler",                img:"TM",   chUrl:"https://cricheroes.com/player-profile/23108798/tushar-more/matches"},
-  {id:23, name:"Vikramjeet Sangavkar", role:"Batsman / WK",          img:"VS",   chUrl:"https://cricheroes.com/player-profile/29553277/vicky-sangavkar/matches"},
-  {id:24, name:"Vineet Shende",        role:"All-Rounder",           img:"VSh",  chUrl:"https://cricheroes.com/player-profile/30602888/vineet-shende/matches"},
-  {id:25, name:"Srini Vellingiri",     role:"Batsman",               img:"SV2",  chUrl:"https://cricheroes.com/player-profile/23196220/srini/matches"},
-  {id:26, name:"Aravind Kaluva",       role:"Bowling All-Rounder",   img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
-  {id:27, name:"Raghav Ambati",        role:"Batting All-Rounder",   img:"RA",   chUrl:"https://cricheroes.com/player-profile/50005907/raghav-ambati/matches"},
-  {id:28, name:"Karan Shah",           role:"Bowling All-Rounder",   img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
-  {id:29, name:"Vibhor",               role:"Batsman / WK",          img:"VB",   chUrl:""},
-  {id:29, name:"Sarvanan Marimuthu",   role:"Batsman / WK",          img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
+  {id:1,  name:"Abdul Mubeen",          role:"All-Rounder",           img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
+  {id:2,  name:"Amit Jadli",            role:"Batsman / WK",          img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
+  {id:3,  name:"Anshul Dikshit",        role:"Batsman",               img:"AD",   chUrl:"https://cricheroes.com/player-profile/29553371/anshul-dikshit/matches"},
+  {id:4,  name:"Ashish Nageet",         role:"All-Rounder",           img:"AN",   chUrl:"https://cricheroes.com/player-profile/9793757/ashish-nageet/matches"},
+  {id:5,  name:"Janesh Chohan",         role:"All-Rounder",           img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
+  {id:6,  name:"Jitendra Mistry",       role:"Batsman",               img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
+  {id:7,  name:"Kannan Santharam",      role:"All-Rounder",           img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
+  {id:8,  name:"Karthik Vempati",       role:"Batsman",               img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
+  {id:9,  name:"Krunal Shah",           role:"All-Rounder",           img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
+  {id:10, name:"Mahendra Negi",         role:"All-Rounder",           img:"MN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
+  {id:11, name:"Nikhil Surabhi",        role:"Batsman",               img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
+  {id:12, name:"Pradeep Patil",         role:"Bowling All-Rounder",   img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
+  {id:13, name:"Pranay Raj",            role:"All-Rounder",           img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
+  {id:14, name:"Rajat Mehrotra",        role:"All-Rounder / WK",      img:"RM",   chUrl:"https://cricheroes.com/player-profile/9755522/rajat-mehrotra/matches"},
+  {id:15, name:"Sameer Saxena",         role:"Batsman",               img:"SS",   chUrl:"https://cricheroes.com/player-profile/9670658/sameer-saxena/matches"},
+  {id:16, name:"Sandeep Kirpane",       role:"All-Rounder",           img:"SK",   chUrl:"https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"},
+  {id:17, name:"Sanjay Prajapati",      role:"Bowler",                img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
+  {id:18, name:"Sanket Rana",           role:"Batsman",               img:"SRa",  chUrl:"https://cricheroes.com/player-profile/29553267/sanket-rana/matches"},
+  {id:19, name:"Santosh Vaghmare",      role:"Bowling All-Rounder",   img:"SV",   chUrl:"https://cricheroes.com/player-profile/15997501/santosh-waghmare/matches"},
+  {id:20, name:"Savan Paka",            role:"Batsman",               img:"SPa",  chUrl:"https://cricheroes.com/player-profile/7984823/savan/matches"},
+  {id:21, name:"Sushil Page",           role:"Batsman",               img:"SuP",  chUrl:"https://cricheroes.com/player-profile/30241439/sushil-page/matches"},
+  {id:22, name:"Tushar More",           role:"Bowler",                img:"TM",   chUrl:"https://cricheroes.com/player-profile/23108798/tushar-more/matches"},
+  {id:23, name:"Vikramjeet Sangavkar",  role:"Batsman / WK",          img:"VS",   chUrl:"https://cricheroes.com/player-profile/29553277/vicky-sangavkar/matches"},
+  {id:24, name:"Vineet Shende",         role:"All-Rounder",           img:"VSh",  chUrl:"https://cricheroes.com/player-profile/30602888/vineet-shende/matches"},
+  {id:25, name:"Srini Vellingiri",      role:"Batsman",               img:"SV2",  chUrl:"https://cricheroes.com/player-profile/23196220/srini/matches"},
+  {id:26, name:"Aravind Kaluva",        role:"Bowling All-Rounder",   img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
+  {id:27, name:"Raghav Ambati",         role:"Batting All-Rounder",   img:"RA",   chUrl:"https://cricheroes.com/player-profile/50005907/raghav-ambati/matches"},
+  {id:28, name:"Karan Shah",            role:"Bowling All-Rounder",   img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
+  {id:29, name:"Vibhor",               role:"Batsman / WK",           img:"VB",   chUrl:""},
+  {id:30, name:"Sarvanan Marimuthu",    role:"Batsman",               img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
 ];
 const roleTier=(r:string):string=>r==="All-Rounder"?"Elite":r.includes("All-Rounder")?"Premium":"Standard";
 
@@ -119,7 +119,7 @@ const INIT_TEAMS=buildInitTeams();
 const INIT_STATE:AuctionState={
   queue:[],curIdx:0,curBid:0,curBidder:null,
   aRound:0,phase:"banner",showSold:false,aDone:false,
-  log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,
+  log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,skippedTeams:[],
 };
 
 // ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
@@ -473,10 +473,13 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .vsp-close{margin-top:20px;padding:10px 28px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:var(--txt);font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;cursor:pointer}
 
 /* Captain celebration popup */
-.cap-celeb-popup{background:linear-gradient(145deg,#0d2818,#17132a);border:2px solid var(--ok);border-radius:24px;padding:36px 30px;text-align:center;max-width:400px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 40px rgba(52,211,153,.2)}
+.cap-celeb-popup{background:linear-gradient(145deg,#0d2818,#17132a);border:2px solid var(--ok);border-radius:24px;padding:36px 30px;text-align:center;max-width:420px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 50px rgba(52,211,153,.25);overflow:hidden}
+.celeb-rain{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;overflow:hidden}
+.celeb-emoji{position:absolute;font-size:22px;animation:emojiRain linear infinite;opacity:0}
+@keyframes emojiRain{0%{transform:translateY(-30px) rotate(0deg);opacity:1}100%{transform:translateY(500px) rotate(360deg);opacity:0}}
 .confetti{font-size:28px;animation:confettiFall 1s ease-out infinite alternate}
 @keyframes confettiFall{from{transform:translateY(0) rotate(0deg)}to{transform:translateY(-8px) rotate(20deg)}}
-.celeb-title{font-family:'Bebas Neue';font-size:38px;letter-spacing:4px;color:var(--ok);margin:10px 0 4px;text-shadow:0 0 20px rgba(0,255,136,.5)}
+.celeb-title{font-family:'Bebas Neue';font-size:42px;letter-spacing:4px;color:var(--ok);margin:10px 0 4px;text-shadow:0 0 30px rgba(52,211,153,.6)}
 .celeb-player{font-family:'Bebas Neue';font-size:30px;letter-spacing:2px;margin:8px 0;line-height:1}
 .celeb-price{font-family:'Bebas Neue';font-size:22px;letter-spacing:2px;color:var(--gold);margin:4px 0}
 .celeb-purse{font-size:12px;color:var(--mut);margin-top:8px}
@@ -497,11 +500,68 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 
 ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:#0f0d1a} ::-webkit-scrollbar-thumb{background:#3d3560;border-radius:3px}
 
+/* ─── RESPONSIVE ─────────────────────────────────────────────── */
+/* Tablet */
+@media(max-width:900px){
+  .tgrid{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+  .pgg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .sqg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+}
+/* Mobile landscape + small tablets */
 @media(max-width:680px){
-  .al{grid-template-columns:1fr} .sb{max-height:220px;border-left:none;border-top:1px solid var(--bd)}
-  .cap-layout{grid-template-columns:1fr} .cap-side{max-height:280px;border-left:none;border-top:1px solid var(--bd)}
-  .pn{font-size:24px} .ba{font-size:32px} .bg{grid-template-columns:repeat(3,1fr)}
-  .cap-purse-strip{grid-template-columns:repeat(2,1fr)} .nt{padding:10px 9px;font-size:11px}
+  /* Auction layout stacks */
+  .al{grid-template-columns:1fr;min-height:unset}
+  .sb{max-height:240px;border-left:none;border-top:1px solid var(--bd)}
+  /* Captain layout stacks */
+  .cap-layout{grid-template-columns:1fr;min-height:unset}
+  .cap-side{max-height:260px;border-left:none;border-top:1px solid var(--bd)}
+  /* Text scaling */
+  .pn{font-size:22px;letter-spacing:2px}
+  .ba{font-size:30px}
+  .ba-amount,.bid-amt{font-size:30px}
+  .cbd-amount{font-size:38px!important}
+  /* Grids */
+  .bg{grid-template-columns:repeat(3,1fr);gap:5px}
+  .cap-purse-strip{grid-template-columns:repeat(2,1fr)}
+  .tgrid{grid-template-columns:1fr}
+  .pgg{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
+  .sqg{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
+  /* Nav */
+  .nt{padding:10px 8px;font-size:11px;letter-spacing:.5px}
+  /* Header */
+  .hdr{padding:8px 12px;flex-wrap:wrap;gap:6px}
+  .hl{font-size:16px;letter-spacing:2px}
+  /* Login hero */
+  .lhero-parsippany{font-size:32px;letter-spacing:4px}
+  .lhero-title{font-size:32px;letter-spacing:4px}
+  .lhero-teams{gap:10px;padding:12px 16px}
+  .lb{padding:20px 16px}
+  /* Team cards */
+  .tfh{padding:12px}
+  .tfs{padding:0 12px 10px;gap:5px}
+  /* Bid stage */
+  .bid-stage{padding:14px}
+  .stg{padding:12px}
+  .cap-main{padding:12px}
+  /* Spotlight */
+  .spl{padding:16px;margin-bottom:10px}
+  /* Action row */
+  .ar{gap:6px}
+  .sdb,.usb{padding:10px;font-size:16px}
+  /* Sidebar */
+  .ss{padding:10px}
+  /* Bg grid = 2 cols on mobile for 3 teams */
+  .bg{grid-template-columns:repeat(3,1fr)}
+}
+/* Small phones */
+@media(max-width:380px){
+  .lhero-parsippany{font-size:26px}
+  .lhero-title{font-size:26px}
+  .bg{grid-template-columns:repeat(3,1fr)}
+  .cap-purse-strip{grid-template-columns:repeat(2,1fr)}
+  .pn{font-size:18px}
+  .nt{padding:8px 6px;font-size:10px}
+  .csv{font-size:18px}
 }
 `;
 
@@ -534,7 +594,7 @@ export default function App() {
             } else {
               const safe:AuctionState={
                 ...INIT_STATE,...raw,
-                queue:safeArr(raw.queue),log:safeArr(raw.log),
+                queue:safeArr(raw.queue),log:safeArr(raw.log),skippedTeams:safeArr(raw.skippedTeams),
                 teams:safeArr(raw.teams).map(t=>({...t,squad:safeArr(t.squad)})),
                 players:safeArr(raw.players),
                 lastSold:raw.lastSold??null,
@@ -586,8 +646,35 @@ export default function App() {
     if(!team)return;
     const nb=snap.curBidder!==null?snap.curBid+MIN_BID:cp.basePrice;
     if(team.purse<nb)return;
+    // When a team bids, remove them from skipped list (they're back in)
+    const skipped=(safeArr(snap.skippedTeams)).filter(id=>id!==tid);
     const log=addLog(snap,"💰",`${team.short} bid ${fmt(nb)} for ${cp.name}`);
-    await patch({curBid:nb,curBidder:tid,log} as Partial<AuctionState>);
+    await patch({curBid:nb,curBidder:tid,log,skippedTeams:skipped} as Partial<AuctionState>);
+  };
+
+  // SKIP: captain passes on this player. If ALL teams have skipped → mark unsold.
+  const doSkip=async(tid:number)=>{
+    const snap=await readSt();
+    const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
+    if(!cp||snap.phase!=="running")return;
+    const team=safeArr(snap.teams).find(t=>t.id===tid);
+    if(!team)return;
+    const skipped=[...new Set([...safeArr(snap.skippedTeams),tid])];
+    const activeBidders=safeArr(snap.teams).filter(t=>
+      safeArr(t.squad).length<MAX_SQUAD &&
+      t.marqueeCount<MAX_MARQUEE &&
+      t.purse>=(snap.curBidder!==null?snap.curBid+MIN_BID:cp.basePrice) &&
+      !skipped.includes(t.id)
+    );
+    const log=addLog(snap,"⏭️",`${team.short} passed on ${cp.name}`);
+    if(activeBidders.length===0){
+      // All teams skipped → auto unsold
+      const log2=addLog({...snap,log},"❌",`${cp.name} UNSOLD — all teams passed`);
+      await patch({log:log2,skippedTeams:[],lastSold:null} as Partial<AuctionState>);
+      advance();
+    } else {
+      await patch({log,skippedTeams:skipped} as Partial<AuctionState>);
+    }
   };
 
   const doSold=async()=>{
@@ -634,7 +721,7 @@ export default function App() {
       }
     } else {
       const np=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[next]);
-      await patch({curIdx:next,curBid:np?.basePrice??20,curBidder:null,showSold:false,lastSold:null} as Partial<AuctionState>);
+      await patch({curIdx:next,curBid:np?.basePrice??20,curBidder:null,showSold:false,lastSold:null,skippedTeams:[]} as Partial<AuctionState>);
     }
   };
 
@@ -654,6 +741,10 @@ export default function App() {
     if(team.id===st.curBidder)return false;
     return true;
   },[st,curPlayer]);
+
+  const hasSkipped=useCallback((teamId:number):boolean=>{
+    return safeArr(st.skippedTeams).includes(teamId);
+  },[st]);
 
   if(!fbReady)return(<><style>{CSS}</style><FirebaseSetup onSave={cfg=>{saveCfg(cfg);initFB(cfg);setFbReady(true);setLoading(true);}}/></>);
   if(loading)return(<><style>{CSS}</style><div className="conn"><div className="spin"/><div style={{color:"var(--cyan)",fontSize:13,letterSpacing:1}}>Connecting to Parstriker…</div></div></>);
@@ -683,23 +774,44 @@ export default function App() {
     {role==="captain"&&celebPopup&&(
       <div className="overlay-backdrop">
         <div className="cap-celeb-popup">
-          <div style={{fontSize:40}}>🎉🏏🎉</div>
-          <div className="celeb-title">YOU GOT HIM!</div>
-          <div className="celeb-player">{celebPopup.playerName}</div>
-          <div style={{fontSize:11,color:"var(--mut)",marginBottom:4}}>SOLD TO YOUR TEAM FOR</div>
-          <div className="celeb-price">{fmt(celebPopup.price)}</div>
-          <div className="celeb-purse">Purse remaining: {fmt(celebPopup.purseLeft)}</div>
-          <div style={{display:"flex",justifyContent:"center",gap:8,margin:"12px 0 0",fontSize:24}}>
-            {["🎊","⭐","🏆","⭐","🎊"].map((e,i)=><span key={i} style={{animation:`confettiFall ${0.8+i*0.1}s ease-out infinite alternate`}}>{e}</span>)}
+          {/* Flying emoji rain in background */}
+          <div className="celeb-rain">
+            {["🎉","🏏","⭐","🎊","💰","🏆","✨","🎯","🥳","💫"].map((e,i)=>(
+              <span key={i} className="celeb-emoji" style={{
+                left:`${8+i*9}%`,
+                animationDuration:`${1.2+i*0.15}s`,
+                animationDelay:`${i*0.1}s`,
+                fontSize:`${18+Math.abs(i%3)*6}px`,
+              }}>{e}</span>
+            ))}
           </div>
-          <button className="celeb-close" onClick={()=>setCelebPopup(null)}>AWESOME! 🎯</button>
+          {/* Content */}
+          <div style={{position:"relative",zIndex:1}}>
+            <div style={{fontSize:52,marginBottom:4,animation:"confettiFall .6s ease-out infinite alternate"}}>🏆</div>
+            <div className="celeb-title">YOU GOT HIM!</div>
+            <div className="celeb-player">{celebPopup.playerName}</div>
+            <div style={{fontSize:10,color:"var(--mut)",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Secured for</div>
+            <div className="celeb-price">{fmt(celebPopup.price)}</div>
+            <div style={{display:"flex",justifyContent:"center",gap:16,margin:"14px 0",flexWrap:"wrap"}}>
+              <div style={{background:"rgba(52,211,153,.1)",border:"1px solid rgba(52,211,153,.3)",borderRadius:10,padding:"8px 16px"}}>
+                <div style={{fontFamily:"'Bebas Neue'",fontSize:18,color:"var(--ok)"}}>{fmt(celebPopup.purseLeft)}</div>
+                <div style={{fontSize:9,color:"var(--mut)",letterSpacing:1}}>PURSE LEFT</div>
+              </div>
+            </div>
+            <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:16,fontSize:26}}>
+              {["🎊","🎉","🏏","🎉","🎊"].map((e,i)=>(
+                <span key={i} style={{display:"inline-block",animation:`confettiFall ${0.7+i*0.12}s ease-out infinite alternate`}}>{e}</span>
+              ))}
+            </div>
+            <button className="celeb-close" onClick={()=>setCelebPopup(null)}>AWESOME! 🎯</button>
+          </div>
         </div>
       </div>
     )}
 
     {role==="login"&&<LoginScreen teams={safeArr(st.teams)} onLogin={(r,tid)=>{setRole(r);if(tid!==undefined)setTeamId(tid);}}/>}
-    {role==="admin"&&<AdminView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} progPct={progPct} onBid={placeBid} onSold={doSold} onUnsold={doUnsold} onStartRound={startRound} onLogout={logout} onReset={resetAll} canBid={canBid}/>}
-    {role==="captain"&&myTeam&&<CaptainView myTeam={myTeam} st={st} curPlayer={curPlayer} onBid={placeBid} onLogout={logout} canBid={canBid(myTeam)}/>}
+    {role==="admin"&&<AdminView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} progPct={progPct} onBid={placeBid} onSold={doSold} onUnsold={doUnsold} onSkip={doSkip} onStartRound={startRound} onLogout={logout} onReset={resetAll} canBid={canBid} hasSkipped={hasSkipped}/>}
+    {role==="captain"&&myTeam&&<CaptainView myTeam={myTeam} st={st} curPlayer={curPlayer} onBid={placeBid} onSkip={doSkip} onLogout={logout} canBid={canBid(myTeam)} hasSkipped={hasSkipped(myTeam.id)}/>}
     {role==="viewer"&&<ViewerView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} onLogout={logout}/>}
   </>);
 }
@@ -794,9 +906,9 @@ function LoginScreen({teams,onLogin}:{teams:Team[];onLogin:(r:Role,tid?:number)=
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
-function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsold,onStartRound,onLogout,onReset,canBid}:{
+function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsold,onSkip,onStartRound,onLogout,onReset,canBid,hasSkipped}:{
   st:AuctionState;curPlayer:Player|undefined;leadTeam:Team|undefined;soldCount:number;progPct:number;
-  onBid:(id:number)=>void;onSold:()=>void;onUnsold:()=>void;onStartRound:(r:number)=>void;onLogout:()=>void;onReset:()=>void;canBid:(t:Team)=>boolean;
+  onBid:(id:number)=>void;onSold:()=>void;onUnsold:()=>void;onSkip:(id:number)=>void;onStartRound:(r:number)=>void;onLogout:()=>void;onReset:()=>void;canBid:(t:Team)=>boolean;hasSkipped:(id:number)=>boolean;
 }){
   const [tab,setTab]=useState<"auction"|"players"|"teams">("auction");
   const [filter,setFilter]=useState("All");
@@ -881,19 +993,35 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
               <div className="bg">
                 {teams.map(team=>{
                   const able=canBid(team),isLead=team.id===st.curBidder;
+                  const skipped=hasSkipped(team.id);
                   const nb=st.curBidder!==null?st.curBid+MIN_BID:curPlayer.basePrice;
-                  return(<button key={team.id} className="tbb" disabled={!able}
-                    style={{borderColor:isLead?team.color:"var(--bd)",background:isLead?`${team.color}22`:"var(--s2)",color:isLead?team.color:"var(--txt)"}}
-                    onClick={()=>onBid(team.id)}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                      <TeamLogo teamId={team.id} size={24}/>
-                      {able&&<span style={{fontSize:9,color:"var(--gold)",fontFamily:"'Bebas Neue'"}}>{fmt(nb)}</span>}
+                  return(
+                    <div key={team.id} style={{display:"flex",flexDirection:"column",gap:4}}>
+                      <button className="tbb" disabled={!able}
+                        style={{borderColor:isLead?team.color:skipped?"rgba(251,146,60,.4)":"var(--bd)",
+                          background:isLead?`${team.color}22`:skipped?"rgba(251,146,60,.06)":"var(--s2)",
+                          color:isLead?team.color:"var(--txt)"}}
+                        onClick={()=>onBid(team.id)}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                          <TeamLogo teamId={team.id} size={24}/>
+                          {able&&<span style={{fontSize:9,color:"var(--gold)",fontFamily:"'Bebas Neue'"}}>{fmt(nb)}</span>}
+                        </div>
+                        <div className="tdg" style={{background:`${team.color}22`,color:team.color}}>{team.short}</div>
+                        <div style={{fontSize:8,opacity:.55,marginTop:2}}>{fmt(team.purse)}</div>
+                        {isLead&&<div style={{fontSize:8,color:"var(--ok)",marginTop:1}}>● LEADING</div>}
+                        {skipped&&!isLead&&<div style={{fontSize:8,color:"var(--warn)",marginTop:1}}>⏭ PASSED</div>}
+                        {safeArr(team.squad).length>=MAX_SQUAD&&<div style={{fontSize:8,color:"var(--ng)",marginTop:1}}>FULL</div>}
+                      </button>
+                      {!isLead&&!st.showSold&&st.phase==="running"&&(
+                        <button style={{background:"transparent",border:"1px solid rgba(251,146,60,.3)",
+                          borderRadius:7,padding:"3px 0",fontSize:9,color:"var(--warn)",cursor:"pointer",
+                          fontFamily:"'Rajdhani'",fontWeight:700,letterSpacing:.5}}
+                          onClick={()=>onSkip(team.id)}>
+                          ⏭ PASS
+                        </button>
+                      )}
                     </div>
-                    <div className="tdg" style={{background:`${team.color}22`,color:team.color}}>{team.short}</div>
-                    <div style={{fontSize:8,opacity:.55,marginTop:2}}>{fmt(team.purse)}</div>
-                    {isLead&&<div style={{fontSize:8,color:"var(--ok)",marginTop:1}}>● LEADING</div>}
-                    {safeArr(team.squad).length>=MAX_SQUAD&&<div style={{fontSize:8,color:"var(--ng)",marginTop:1}}>FULL</div>}
-                  </button>);
+                  );
                 })}
               </div>
               <div className="ar">
@@ -999,8 +1127,8 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
 }
 
 // ─── CAPTAIN ──────────────────────────────────────────────────────────────────
-function CaptainView({myTeam,st,curPlayer,onBid,onLogout,canBid}:{
-  myTeam:Team;st:AuctionState;curPlayer:Player|undefined;onBid:(id:number)=>void;onLogout:()=>void;canBid:boolean;
+function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkipped}:{
+  myTeam:Team;st:AuctionState;curPlayer:Player|undefined;onBid:(id:number)=>void;onSkip:(id:number)=>void;onLogout:()=>void;canBid:boolean;hasSkipped:boolean;
 }){
   const isLeading=st.curBidder===myTeam.id;
   const pctLeft=(myTeam.purse/PURSE)*100;
@@ -1123,11 +1251,29 @@ function CaptainView({myTeam,st,curPlayer,onBid,onLogout,canBid}:{
 
             {/* BID BUTTON */}
             <button className="cbb"
-              style={{background:isLeading?"linear-gradient(135deg,var(--ok),#00cc66)":"linear-gradient(135deg,var(--gold),#ff9900)"}}
+              style={{background:isLeading?"linear-gradient(135deg,var(--ok),#00cc66)":"linear-gradient(135deg,#7c3aed,#4f46e5)"}}
               disabled={!canBid} onClick={()=>onBid(myTeam.id)}>
-              {isLeading?`✓ LEADING  ${fmt(st.curBid)}`:canBid?`🔨 BID  ${fmt(nextBid)}`:"CANNOT BID"}
+              {isLeading?`✓ LEADING ${fmt(st.curBid)}`:canBid?`🔨 BID ${fmt(nextBid)}`:"CANNOT BID"}
             </button>
-            {!canBid&&!isLeading&&(
+
+            {/* PASS button — skip this player, re-enter if someone else bids */}
+            {!isLeading&&st.phase==="running"&&!st.showSold&&(
+              <button onClick={()=>onSkip(myTeam.id)}
+                style={{width:"100%",marginTop:8,padding:"11px",background:"transparent",
+                  border:`1px solid ${hasSkipped?"rgba(251,146,60,.6)":"rgba(251,146,60,.25)"}`,
+                  borderRadius:11,color:hasSkipped?"var(--warn)":"rgba(251,146,60,.6)",
+                  fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:3,cursor:"pointer",transition:"all .2s"}}>
+                {hasSkipped?"⏭ PASSED — WAIT FOR OTHERS":"⏭ PASS THIS PLAYER"}
+              </button>
+            )}
+            {hasSkipped&&!isLeading&&(
+              <div style={{fontSize:10,color:"rgba(251,146,60,.8)",marginTop:6,textAlign:"center",
+                background:"rgba(251,146,60,.06)",border:"1px solid rgba(251,146,60,.15)",
+                borderRadius:8,padding:"5px 10px"}}>
+                You passed — you can still BID if another team bids first!
+              </div>
+            )}
+            {!canBid&&!isLeading&&!hasSkipped&&(
               <div style={{fontSize:10,color:"var(--mut)",marginTop:8}}>
                 {myTeam.purse<nextBid?"⚠ Insufficient purse":squad.length>=MAX_SQUAD?"⚠ Squad full":myTeam.marqueeCount>=MAX_MARQUEE?"⚠ All slots used":"Bidding paused"}
               </div>
