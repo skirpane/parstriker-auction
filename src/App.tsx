@@ -1,8 +1,9 @@
 // src/App.tsx
 import { useState, useEffect, useCallback } from "react";
-import { initializeApp } from "firebase/app";
+import { initializeApp, FirebaseApp } from "firebase/app";
 import {
   getDatabase,
+  Database,
   ref,
   onValue,
   set,
@@ -10,21 +11,47 @@ import {
   get,
 } from "firebase/database";
 
-// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
-// Replace these values with YOUR Firebase project config
-// Get them: console.firebase.google.com → Project Settings → Your apps → </> Web
-// Import the functions you need from the SDKs you need
+// ─── FIREBASE LAZY INIT ───────────────────────────────────────────────────────
+// Config is stored in localStorage so you enter it once in the browser
+// and it is remembered forever — no code changes needed.
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD3k2c_0oX3C3f1nAqDRYidKYNCGJgF7I4",
-  authDomain: "parstriker-auction.firebaseapp.com",
-  databaseURL: "https://parstriker-auction-default-rtdb.firebaseio.com",
-  projectId: "parstriker-auction",
-  storageBucket: "parstriker-auction.firebasestorage.app",
-  messagingSenderId: "1400458016",
-  appId: "1:1400458016:web:b19f0b8d854f5a9df02545",
-  measurementId: "G-K3DN5P60EC"
-};
+interface FBConfig {
+  apiKey: string; authDomain: string; databaseURL: string;
+  projectId: string; storageBucket: string;
+  messagingSenderId: string; appId: string;
+}
+
+const FB_STORE_KEY = "ps_fb_config";
+
+function loadSavedConfig(): FBConfig | null {
+  try {
+    const raw = localStorage.getItem(FB_STORE_KEY);
+    return raw ? JSON.parse(raw) as FBConfig : null;
+  } catch { return null; }
+}
+
+function saveConfig(cfg: FBConfig): void {
+  localStorage.setItem(FB_STORE_KEY, JSON.stringify(cfg));
+}
+
+let _fbApp:  FirebaseApp | null = null;
+let _fbDb:   Database    | null = null;
+
+function initFirebase(cfg: FBConfig): Database {
+  if (!_fbApp) {
+    _fbApp = initializeApp(cfg);
+    _fbDb  = getDatabase(_fbApp);
+  }
+  return _fbDb!;
+}
+
+function getDb(): Database {
+  if (_fbDb) return _fbDb;
+  const cfg = loadSavedConfig();
+  if (cfg) return initFirebase(cfg);
+  throw new Error("Firebase not initialised");
+}
+
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type Role  = "login" | "admin" | "captain" | "viewer";
@@ -82,38 +109,35 @@ const TIERS: Record<string, SkillTier> = {
 const TIER_ORDER = ["World Class", "International", "Domestic Star", "Emerging"];
 
 const RAW_PLAYERS = [
-  { id:1,  name:"Virat Kohli",       role:"Batsman",     tier:"World Class",   country:"IND", img:"VK"  },
-  { id:2,  name:"Rohit Sharma",      role:"Batsman",     tier:"World Class",   country:"IND", img:"RS"  },
-  { id:3,  name:"Jasprit Bumrah",    role:"Bowler",      tier:"World Class",   country:"IND", img:"JB"  },
-  { id:4,  name:"Jos Buttler",       role:"WK-Batsman",  tier:"World Class",   country:"ENG", img:"JBu" },
-  { id:5,  name:"Pat Cummins",       role:"All-Rounder", tier:"World Class",   country:"AUS", img:"PC"  },
-  { id:6,  name:"Babar Azam",        role:"Batsman",     tier:"World Class",   country:"PAK", img:"BA"  },
-  { id:7,  name:"Ben Stokes",        role:"All-Rounder", tier:"World Class",   country:"ENG", img:"BS"  },
-  { id:8,  name:"Kane Williamson",   role:"Batsman",     tier:"World Class",   country:"NZ",  img:"KW"  },
-  { id:9,  name:"Shreyas Iyer",      role:"Batsman",     tier:"International", country:"IND", img:"SI"  },
-  { id:10, name:"Suryakumar Yadav",  role:"Batsman",     tier:"International", country:"IND", img:"SKY" },
-  { id:11, name:"Ravindra Jadeja",   role:"All-Rounder", tier:"International", country:"IND", img:"RJ"  },
-  { id:12, name:"Mohammed Shami",    role:"Bowler",      tier:"International", country:"IND", img:"MS"  },
-  { id:13, name:"Glenn Maxwell",     role:"All-Rounder", tier:"International", country:"AUS", img:"GM"  },
-  { id:14, name:"Quinton de Kock",   role:"WK-Batsman",  tier:"International", country:"SA",  img:"QDK" },
-  { id:15, name:"Trent Boult",       role:"Bowler",      tier:"International", country:"NZ",  img:"TB"  },
-  { id:16, name:"Rashid Khan",       role:"Bowler",      tier:"International", country:"AFG", img:"RK"  },
-  { id:17, name:"David Warner",      role:"Batsman",     tier:"International", country:"AUS", img:"DW"  },
-  { id:18, name:"Shubman Gill",      role:"Batsman",     tier:"International", country:"IND", img:"SG"  },
-  { id:19, name:"Prithvi Shaw",      role:"Batsman",     tier:"Domestic Star", country:"IND", img:"PS"  },
-  { id:20, name:"Ishan Kishan",      role:"WK-Batsman",  tier:"Domestic Star", country:"IND", img:"IK"  },
-  { id:21, name:"Shardul Thakur",    role:"All-Rounder", tier:"Domestic Star", country:"IND", img:"ST"  },
-  { id:22, name:"Axar Patel",        role:"All-Rounder", tier:"Domestic Star", country:"IND", img:"AP"  },
-  { id:23, name:"Arshdeep Singh",    role:"Bowler",      tier:"Domestic Star", country:"IND", img:"AS"  },
-  { id:24, name:"Rinku Singh",       role:"Batsman",     tier:"Domestic Star", country:"IND", img:"RSi" },
-  { id:25, name:"Tilak Varma",       role:"Batsman",     tier:"Domestic Star", country:"IND", img:"TV"  },
-  { id:26, name:"Deepak Hooda",      role:"All-Rounder", tier:"Domestic Star", country:"IND", img:"DH"  },
-  { id:27, name:"Yashasvi Jaiswal",  role:"Batsman",     tier:"Emerging",      country:"IND", img:"YJ"  },
-  { id:28, name:"Riyan Parag",       role:"All-Rounder", tier:"Emerging",      country:"IND", img:"RP"  },
-  { id:29, name:"Nitish Rana",       role:"Batsman",     tier:"Emerging",      country:"IND", img:"NR"  },
-  { id:30, name:"Mukesh Kumar",      role:"Bowler",      tier:"Emerging",      country:"IND", img:"MK"  },
-  { id:31, name:"Abhishek Sharma",   role:"All-Rounder", tier:"Emerging",      country:"IND", img:"AbS" },
-  { id:32, name:"Rajat Patidar",     role:"Batsman",     tier:"Emerging",      country:"IND", img:"RPa" },
+  { id:1,  name:"Abdul Mubeen",     role:"All-Rounder",     tier:"Emerging", country:"IND", img:"AM"  },
+  { id:2,  name:"Amit Jadli",       role:"Batsman/Wicket-Keeper",     tier:"Emerging", country:"IND", img:"AJ"  },
+  { id:3,  name:"Anshul Dikshit",   role:"Batsman",      tier:"Emerging", country:"IND", img:"AD"  },
+  { id:4,  name:"Ashish Negeet",    role:"All-Rounder", tier:"Emerging", country:"IND", img:"AN"  },
+  { id:5,  name:"Janesh Chohan",    role:"All-Rounder",     tier:"Emerging", country:"IND", img:"JC"  },
+  { id:6,  name:"Jitendra Mistry",  role:"Batsman", tier:"Emerging", country:"IND", img:"JM"  },
+  { id:7, name:"Kannan Santharam", role:"All-Rounder",     tier:"Emerging", country:"IND", img:"KS"  },
+  { id:8, name:"Karthik Vempati",  role:"Batsman",     tier:"Emerging", country:"IND", img:"KV"  },
+  { id:9, name:"Krunal Shah",      role:"All-Rounder",      tier:"Emerging", country:"IND", img:"KSh" },
+  { id:10, name:"Mahendra Negi",    role:"All-Rounder",     tier:"Emerging", country:"IND", img:"MN"  },
+  { id:11, name:"Nikhil Surabhi",   role:"Batsman",     tier:"Emerging", country:"IND", img:"NS"  },
+  { id:12, name:"Pradeep Patil",    role:"Bowling All-Rounder",      tier:"Emerging", country:"IND", img:"PP"  },
+  { id:13, name:"Pranay Raj",       role:"All-Rounder", tier:"Emerging", country:"IND", img:"PR"  },
+  { id:14, name:"Rajat Mehrotra",   role:"All-Rounder/Wicket-Keeper", tier:"Emerging", country:"IND", img:"RM"  },
+  { id:15, name:"Sameer Saxena",    role:"Batsman",     tier:"Emerging", country:"IND", img:"SS"  },
+  { id:16, name:"Sandeep Kirpane",  role:"All-Rounder", tier:"Emerging", country:"IND", img:"SK"  },
+  { id:17, name:"Sanjay Prajapati", role:"Bowler",      tier:"Emerging", country:"IND", img:"SP"  },
+  { id:18, name:"Sanket Rana",      role:"Batsman",     tier:"Emerging", country:"IND", img:"SRa" },
+  { id:19, name:"Santosh Vaghmare", role:"Bowling All-Rounder", tier:"Emerging", country:"IND", img:"SV"  },
+  { id:20, name:"Savan Paka",       role:"Batsman",      tier:"Emerging", country:"IND", img:"SPa" },
+  { id:21, name:"Sushil Page",      role:"Batsman", tier:"Emerging", country:"IND", img:"SuP" },
+  { id:22, name:"Tushar More",      role:"Bowler",      tier:"Emerging", country:"IND", img:"TM"  },
+  { id:23, name:"Vikramjeet Sangavkar", role:"Batsman/Wicket-Keeper", tier:"Emerging", country:"IND", img:"VS"  },
+  { id:24, name:"Vineet Shende",    role:"All-Rounder", tier:"Emerging", country:"IND", img:"VSh" },
+  { id:25, name:"Srini Vellingiri", role:"Batsman",      tier:"Emerging", country:"IND", img:"SV2" },
+  { id:26, name:"Aravind Kaluva",   role:"Bowler All-Rounder",     tier:"Emerging", country:"IND", img:"AK"  },
+  { id:27, name:"Raghav Ambati",    role:"Batsman All-Rounder", tier:"Emerging", country:"IND", img:"RA"  },
+  { id:28, name:"Karan Shah",       role:"Bowler All-Rounder",      tier:"Emerging", country:"IND", img:"KSh2" },
+  { id:29, name:"Vibhor",           role:"Batsman/Wicket-Keeper",     tier:"Emerging", country:"IND", img:"CL"  },
 ];
 
 const INIT_PLAYERS: Player[] = RAW_PLAYERS.map(p => ({
@@ -121,14 +145,10 @@ const INIT_PLAYERS: Player[] = RAW_PLAYERS.map(p => ({
 }));
 
 const INIT_TEAMS: Team[] = [
-  { id:1, name:"Mumbai Indians",        short:"MI",  color:"#004BA0", captainPass:"mi123",  purse:PURSE, squad:[], marqueeCount:0 },
-  { id:2, name:"Chennai Super Kings",   short:"CSK", color:"#F5A623", captainPass:"csk123", purse:PURSE, squad:[], marqueeCount:0 },
-  { id:3, name:"Royal Challengers",     short:"RCB", color:"#D10000", captainPass:"rcb123", purse:PURSE, squad:[], marqueeCount:0 },
-  { id:4, name:"Kolkata Knight Riders", short:"KKR", color:"#3A225D", captainPass:"kkr123", purse:PURSE, squad:[], marqueeCount:0 },
-  { id:5, name:"Delhi Capitals",        short:"DC",  color:"#0078BC", captainPass:"dc123",  purse:PURSE, squad:[], marqueeCount:0 },
-  { id:6, name:"Rajasthan Royals",      short:"RR",  color:"#254AA5", captainPass:"rr123",  purse:PURSE, squad:[], marqueeCount:0 },
+  { id: 1, name: "Parstriker Blue Indians",   short: "BI",  color: "#0066ff", accent: "#FFD700",  captainPass:"ashish123",  purse:PURSE, squad:[], marqueeCount:0 },
+  { id: 2, name: "Parstriker Red Knights",    short: "RK", color: "#ff3333", accent: "#FFD700", captainPass:"kannan123", purse:PURSE, squad:[], marqueeCount:0 },
+  { id: 3, name: "Parstriker White Wolves",   short: "WW", color: "#ffffff", accent: "#FFD700", captainPass:"sandeep123", purse:PURSE, squad:[], marqueeCount:0 },
 ];
-
 const INIT_STATE: AuctionState = {
   queue: [], curIdx: 0, curBid: 0, curBidder: null,
   aRound: 0, phase: "banner", showSold: false, aDone: false,
@@ -141,7 +161,7 @@ const tc  = (t: string): string =>
   ({ "World Class":"#FFD700","International":"#C0C0C0","Domestic Star":"#CD7F32","Emerging":"#4fc3f7" }[t] ?? "#888");
 
 // ─── FIREBASE HELPERS ────────────────────────────────────────────────────────
-const fbRef = () => ref(db, FB_KEY);
+const fbRef = () => ref(getDb(), FB_KEY);
 
 async function readState(): Promise<AuctionState> {
   const snap = await get(fbRef());
@@ -391,21 +411,31 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 
 // ─── ROOT COMPONENT ───────────────────────────────────────────────────────────
 export default function App() {
+  const [fbReady,  setFbReady]  = useState<boolean>(() => loadSavedConfig() !== null);
   const [role,     setRole]     = useState<Role>("login");
   const [myTeamId, setMyTeamId] = useState<number | null>(null);
   const [st,       setSt]       = useState<AuctionState>(INIT_STATE);
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
 
-  // ── Subscribe to Firebase ──
+  // ── Subscribe to Firebase (only once config exists) ──
   useEffect(() => {
-    const unsub = onValue(fbRef(), snap => {
-      if (snap.exists()) setSt(snap.val() as AuctionState);
-      else writeState(INIT_STATE);
+    if (!fbReady) { setLoading(false); return; }
+    try {
+      const unsub = onValue(fbRef(), snap => {
+        if (snap.exists()) setSt(snap.val() as AuctionState);
+        else writeState(INIT_STATE);
+        setLoading(false);
+      }, (err) => {
+        console.error("Firebase error:", err);
+        setLoading(false);
+      });
+      return () => unsub();
+    } catch(e) {
+      console.error(e);
       setLoading(false);
-    });
-    return () => unsub();
-  }, []);
+    }
+  }, [fbReady]);
 
   // ── Write helper ──
   const write = useCallback(async (next: AuctionState) => {
@@ -527,6 +557,19 @@ export default function App() {
   const soldCount = st.players.filter(p => p.soldTo !== null).length;
   const progPct   = st.queue.length > 0 ? Math.round((st.curIdx / st.queue.length) * 100) : 0;
 
+  // ── Show Firebase setup screen if not configured ──
+  if (!fbReady) return (
+    <>
+      <style>{CSS}</style>
+      <FirebaseSetup onSave={(cfg) => {
+        saveConfig(cfg);
+        initFirebase(cfg);
+        setFbReady(true);
+        setLoading(true);
+      }} />
+    </>
+  );
+
   if (loading) return (
     <>
       <style>{CSS}</style>
@@ -578,6 +621,87 @@ export default function App() {
         />
       )}
     </>
+  );
+}
+
+// ─── FIREBASE SETUP SCREEN ───────────────────────────────────────────────────
+function FirebaseSetup({ onSave }: { onSave: (cfg: FBConfig) => void }) {
+  const [form, setForm] = useState<FBConfig>({
+    apiKey:"", authDomain:"", databaseURL:"", projectId:"",
+    storageBucket:"", messagingSenderId:"", appId:""
+  });
+  const [err, setErr] = useState("");
+
+  const fields: Array<{ key: keyof FBConfig; label: string; hint: string }> = [
+    { key:"apiKey",            label:"API Key",             hint:"AIzaSy..." },
+    { key:"authDomain",        label:"Auth Domain",         hint:"your-app.firebaseapp.com" },
+    { key:"databaseURL",       label:"Database URL ⚠️",     hint:"https://your-app-default-rtdb.firebaseio.com" },
+    { key:"projectId",         label:"Project ID",          hint:"your-app-id" },
+    { key:"storageBucket",     label:"Storage Bucket",      hint:"your-app.appspot.com" },
+    { key:"messagingSenderId", label:"Messaging Sender ID", hint:"123456789" },
+    { key:"appId",             label:"App ID",              hint:"1:123...:web:abc..." },
+  ];
+
+  const handleSave = () => {
+    setErr("");
+    for (const f of fields) {
+      if (!form[f.key].trim()) { setErr(`Please fill in: ${f.label}`); return; }
+    }
+    if (!form.databaseURL.startsWith("https://")) {
+      setErr("Database URL must start with https://"); return;
+    }
+    onSave(form);
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:"radial-gradient(ellipse at 30% 20%,#1a0a2e,transparent 60%),var(--bg)",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:20,padding:"32px 28px",
+        width:"100%",maxWidth:480}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:4,color:"var(--gold)"}}>🏏 PARSTRIKER</div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:3,color:"var(--txt)",marginBottom:6}}>FIREBASE SETUP</div>
+          <div style={{fontSize:12,color:"var(--mut)",lineHeight:1.6}}>
+            One-time setup. Paste your Firebase config below.<br/>
+            Get it from <b style={{color:"var(--gold)"}}>console.firebase.google.com</b><br/>
+            → Project Settings → Your Apps → &lt;/&gt; Web
+          </div>
+        </div>
+
+        {err && <div style={{background:"rgba(255,71,87,.15)",border:"1px solid var(--ng)",borderRadius:8,
+          padding:"8px 12px",fontSize:12,color:"var(--ng)",marginBottom:12}}>{err}</div>}
+
+        {fields.map(f => (
+          <div key={f.key} style={{marginBottom:10}}>
+            <div style={{fontSize:10,color:"var(--mut)",textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>
+              {f.label}
+            </div>
+            <input
+              style={{width:"100%",background:"var(--s1)",border:"1px solid var(--bd)",borderRadius:8,
+                padding:"9px 12px",color:"var(--txt)",fontSize:13,outline:"none"}}
+              placeholder={f.hint}
+              value={form[f.key]}
+              onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value.trim() }))}
+              onFocus={e => (e.target.style.borderColor = "var(--gold)")}
+              onBlur={e  => (e.target.style.borderColor = "var(--bd)")}
+            />
+          </div>
+        ))}
+
+        <button onClick={handleSave}
+          style={{width:"100%",marginTop:16,padding:"14px",background:"linear-gradient(135deg,#FFD700,#FFA500)",
+            border:"none",borderRadius:11,color:"#000",fontFamily:"'Bebas Neue'",fontSize:19,
+            letterSpacing:3,cursor:"pointer"}}>
+          🔥 CONNECT & LAUNCH
+        </button>
+
+        <div style={{marginTop:14,fontSize:10,color:"var(--mut)",textAlign:"center",lineHeight:1.7}}>
+          This config is saved in your browser.<br/>
+          Other devices need to enter it once too.<br/>
+          <span style={{color:"var(--gold)"}}>Don't share your API key publicly.</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
