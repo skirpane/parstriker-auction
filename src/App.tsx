@@ -102,69 +102,98 @@ const INIT_STATE:AuctionState={
   log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,
 };
 
-// ─── SVG LOGOS ────────────────────────────────────────────────────────────────
+// ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
+
+// Main Parstriker logo — cricket bat + ball wordmark style
 const LogoParstriker=({size=48}:{size?:number})=>(
-  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="48" fill="#0a1628" stroke="#c41e3a" strokeWidth="3"/>
-    <circle cx="50" cy="42" r="22" fill="#c41e3a" opacity="0.85"/>
-    <ellipse cx="50" cy="36" rx="9" ry="10" fill="#1a56db"/>
-    <rect x="44" y="46" width="12" height="18" rx="3" fill="#1a56db"/>
-    <line x1="56" y1="50" x2="76" y2="28" stroke="#ffffff" strokeWidth="4" strokeLinecap="round"/>
-    <rect x="72" y="23" width="6" height="10" rx="2" fill="#e8d5a0" transform="rotate(-45 72 23)"/>
-    <circle cx="72" cy="52" r="5" fill="#ff4444" stroke="#fff" strokeWidth="1"/>
-    <path d="M69 50 Q72 48 75 50" stroke="#fff" strokeWidth="1" fill="none"/>
-    <ellipse cx="50" cy="88" rx="28" ry="5" fill="#1a56db" opacity="0.4"/>
-    <circle cx="30" cy="78" r="4" fill="#0d1b2e"/><rect x="27" y="82" width="6" height="10" rx="2" fill="#0d1b2e"/>
-    <circle cx="70" cy="80" r="4" fill="#0d1b2e"/><rect x="67" y="84" width="6" height="9" rx="2" fill="#0d1b2e"/>
+  <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Outer ring */}
+    <circle cx="60" cy="60" r="57" fill="#05050e" stroke="url(#psGold)" strokeWidth="3"/>
+    <defs>
+      <linearGradient id="psGold" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#FFD700"/>
+        <stop offset="100%" stopColor="#00e5ff"/>
+      </linearGradient>
+      <linearGradient id="psBat" x1="30" y1="90" x2="90" y2="30" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#e8d5a0"/>
+        <stop offset="100%" stopColor="#fff8e0"/>
+      </linearGradient>
+    </defs>
+    {/* Cricket bat — diagonal, clean */}
+    <rect x="30" y="55" width="14" height="52" rx="7" fill="url(#psBat)" transform="rotate(-45 60 60)"/>
+    {/* Bat grip */}
+    <rect x="78" y="20" width="6" height="18" rx="3" fill="#c41e3a" transform="rotate(-45 60 60)"/>
+    {/* Ball */}
+    <circle cx="38" cy="78" r="11" fill="#c41e3a"/>
+    <path d="M31 75 Q38 70 45 75" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+    <path d="M31 81 Q38 86 45 81" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+    {/* Stars top */}
+    <text x="60" y="24" textAnchor="middle" fill="#FFD700" fontSize="10" fontFamily="Arial">★ ★ ★</text>
+    {/* PS initials */}
+    <text x="78" y="88" textAnchor="middle" fill="url(#psGold)" fontSize="22" fontFamily="'Bebas Neue',Arial" fontWeight="bold" letterSpacing="2">PS</text>
   </svg>
 );
+
+// Blue Indians — bold "BI" on blue shield
 const LogoBI=({size=48}:{size?:number})=>(
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="48" fill="#0d1b3e" stroke="#1a56db" strokeWidth="2.5"/>
-    <path d="M38 20 Q32 10 26 8 Q30 16 28 24" fill="#1a56db"/>
-    <path d="M42 18 Q38 7 32 4 Q37 13 35 21" fill="#2a66eb"/>
-    <path d="M46 17 Q44 6 38 2 Q44 11 42 19" fill="#1a56db"/>
-    <path d="M50 16 Q50 5 44 1 Q51 10 49 18" fill="#2a66eb"/>
-    <path d="M54 17 Q56 6 62 2 Q55 11 57 19" fill="#1a56db"/>
-    <path d="M58 30 Q62 28 64 34 Q66 42 62 52 Q58 60 52 64 Q46 68 42 64 Q36 58 36 48 Q36 36 42 30 Q48 24 58 30Z" fill="#1a56db"/>
-    <circle cx="57" cy="41" r="2.5" fill="#0d1b3e"/>
-    <path d="M44 50 Q48 54 52 52" stroke="#0d1b3e" strokeWidth="1.5" fill="none"/>
-    <path d="M36 38 Q50 34 64 38" stroke="#FFD700" strokeWidth="2.5" fill="none"/>
-    <path d="M44 64 Q40 72 38 82 Q50 85 62 82 Q60 72 56 64Z" fill="#1a56db"/>
+    <defs>
+      <linearGradient id="biGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#1a56db"/>
+        <stop offset="100%" stopColor="#0a2a80"/>
+      </linearGradient>
+    </defs>
+    {/* Shield shape */}
+    <path d="M50 6 L88 22 L88 54 Q88 78 50 94 Q12 78 12 54 L12 22 Z" fill="url(#biGrad)" stroke="#FFD700" strokeWidth="2.5"/>
+    {/* Gold band */}
+    <path d="M12 36 L88 36" stroke="#FFD700" strokeWidth="2" opacity="0.6"/>
+    {/* Bold BI text */}
+    <text x="50" y="72" textAnchor="middle" fill="#FFD700" fontSize="30" fontFamily="'Bebas Neue',Arial" fontWeight="900" letterSpacing="2">BI</text>
+    {/* Top accent */}
+    <text x="50" y="31" textAnchor="middle" fill="#ffffff" fontSize="9" fontFamily="Arial" opacity="0.7" letterSpacing="1">BLUE INDIANS</text>
   </svg>
 );
+
+// Red Knights — bold "RK" on red shield
 const LogoRK=({size=48}:{size?:number})=>(
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="48" fill="#1a0008" stroke="#c41e3a" strokeWidth="2.5"/>
-    <path d="M50 12 Q42 8 36 14 Q40 16 38 22 Q44 16 50 18Z" fill="#c41e3a"/>
-    <path d="M50 12 Q50 6 46 8 Q48 14 50 18Z" fill="#e03050"/>
-    <path d="M50 12 Q58 8 64 14 Q60 16 62 22 Q56 16 50 18Z" fill="#c41e3a"/>
-    <path d="M28 45 Q26 32 34 24 Q42 18 50 18 Q58 18 66 24 Q74 32 72 45 Q72 58 66 64 Q60 70 50 72 Q40 70 34 64 Q28 58 28 45Z" fill="#c41e3a"/>
-    <path d="M30 46 Q34 42 50 42 Q66 42 70 46 Q68 54 50 56 Q32 54 30 46Z" fill="#8b1020"/>
-    <rect x="34" y="44" width="14" height="3" rx="1.5" fill="#1a0008"/>
-    <rect x="34" y="49" width="14" height="3" rx="1.5" fill="#1a0008"/>
-    <rect x="52" y="44" width="14" height="3" rx="1.5" fill="#1a0008"/>
-    <rect x="52" y="49" width="14" height="3" rx="1.5" fill="#1a0008"/>
-    <path d="M36 64 Q38 74 50 76 Q62 74 64 64 Q58 68 50 68 Q42 68 36 64Z" fill="#c41e3a"/>
+    <defs>
+      <linearGradient id="rkGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#c41e3a"/>
+        <stop offset="100%" stopColor="#7a0010"/>
+      </linearGradient>
+    </defs>
+    {/* Shield shape */}
+    <path d="M50 6 L88 22 L88 54 Q88 78 50 94 Q12 78 12 54 L12 22 Z" fill="url(#rkGrad)" stroke="#FFD700" strokeWidth="2.5"/>
+    {/* Gold band */}
+    <path d="M12 36 L88 36" stroke="#FFD700" strokeWidth="2" opacity="0.6"/>
+    {/* Bold RK text */}
+    <text x="50" y="72" textAnchor="middle" fill="#FFD700" fontSize="30" fontFamily="'Bebas Neue',Arial" fontWeight="900" letterSpacing="2">RK</text>
+    {/* Top accent */}
+    <text x="50" y="31" textAnchor="middle" fill="#ffffff" fontSize="9" fontFamily="Arial" opacity="0.7" letterSpacing="1">RED KNIGHTS</text>
   </svg>
 );
+
+// White Wolves — bold "WW" on dark shield
 const LogoWW=({size=48}:{size?:number})=>(
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="48" fill="#12141a" stroke="#8090aa" strokeWidth="2.5"/>
-    <path d="M28 36 Q24 20 32 16 Q36 26 34 34Z" fill="#b0b8c8"/>
-    <path d="M30 30 Q28 22 33 18 Q35 25 33 30Z" fill="#6070a0"/>
-    <path d="M72 36 Q76 20 68 16 Q64 26 66 34Z" fill="#b0b8c8"/>
-    <path d="M70 30 Q72 22 67 18 Q65 25 67 30Z" fill="#6070a0"/>
-    <path d="M22 54 Q20 40 28 32 Q36 24 50 24 Q64 24 72 32 Q80 40 78 54 Q76 66 66 72 Q58 78 50 78 Q42 78 34 72 Q24 66 22 54Z" fill="#b0b8c8"/>
-    <path d="M36 58 Q40 66 50 68 Q60 66 64 58 Q60 60 50 62 Q40 60 36 58Z" fill="#8090a8"/>
-    <path d="M42 58 Q50 64 58 58 Q54 56 50 57 Q46 56 42 58Z" fill="#d0d8e8"/>
-    <path d="M44 54 Q50 52 56 54 Q52 58 50 57 Q48 58 44 54Z" fill="#2a2e3a"/>
-    <ellipse cx="38" cy="46" rx="6" ry="5" fill="#e8e0f0"/><circle cx="39" cy="46" r="3.5" fill="#4060c0"/>
-    <circle cx="40" cy="45" r="1.5" fill="#0a0a14"/><circle cx="41" cy="44" r="1" fill="#ffffff" opacity="0.7"/>
-    <ellipse cx="62" cy="46" rx="6" ry="5" fill="#e8e0f0"/><circle cx="61" cy="46" r="3.5" fill="#4060c0"/>
-    <circle cx="62" cy="45" r="1.5" fill="#0a0a14"/><circle cx="63" cy="44" r="1" fill="#ffffff" opacity="0.7"/>
+    <defs>
+      <linearGradient id="wwGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#4a5568"/>
+        <stop offset="100%" stopColor="#1a202c"/>
+      </linearGradient>
+    </defs>
+    {/* Shield shape */}
+    <path d="M50 6 L88 22 L88 54 Q88 78 50 94 Q12 78 12 54 L12 22 Z" fill="url(#wwGrad)" stroke="#b0b8c8" strokeWidth="2.5"/>
+    {/* Silver band */}
+    <path d="M12 36 L88 36" stroke="#b0b8c8" strokeWidth="2" opacity="0.6"/>
+    {/* Bold WW text */}
+    <text x="50" y="72" textAnchor="middle" fill="#e0e8f0" fontSize="28" fontFamily="'Bebas Neue',Arial" fontWeight="900" letterSpacing="1">WW</text>
+    {/* Top accent */}
+    <text x="50" y="31" textAnchor="middle" fill="#ffffff" fontSize="9" fontFamily="Arial" opacity="0.7" letterSpacing="1">WHITE WOLVES</text>
   </svg>
 );
+
 const LOGOS:Record<number,(p:{size?:number})=>JSX.Element>={1:LogoBI,2:LogoRK,3:LogoWW};
 const TeamLogo=({teamId,size=40}:{teamId:number;size?:number})=>{const L=LOGOS[teamId];return L?<L size={size}/>:<div style={{width:size,height:size,borderRadius:"50%",background:"#333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size/3,color:"#fff"}}>?</div>;};
 
@@ -627,22 +656,37 @@ export default function App() {
 // ─── FIREBASE SETUP ───────────────────────────────────────────────────────────
 function FirebaseSetup({onSave}:{onSave:(c:FBConfig)=>void}){
   const [sid,setSid]=useState("");const [err,setErr]=useState("");
-  const save=()=>{setErr("");const id=sid.trim();if(!id){setErr("Please enter Messaging Sender ID");return;}if(!/^\d+$/.test(id)){setErr("Numbers only");return;}onSave({...PREFILLED as FBConfig,messagingSenderId:id});};
+  const save=()=>{
+    setErr("");
+    const id=sid.trim();
+    if(!id){setErr("Please enter Messaging Sender ID");return;}
+    if(!/^\d+$/.test(id)){setErr("Numbers only — no spaces");return;}
+    onSave({...PREFILLED as FBConfig,messagingSenderId:id});
+  };
   return(
-    <div className="sw"><div className="sb2">
-      <div className="slogo"><LogoParstriker size={52}/><div><div className="slt">PARSTRIKER</div><div className="ssub" style={{textAlign:"left",marginBottom:0}}>AUCTION SETUP</div></div></div>
-      <div style={{height:16}}/>
-      <div className="spre"><div className="spret">✅ Pre-configured</div>
-        {[["Project","parstriker-auction"],["Database","parstriker-auction-rtdb"],["API Key","AIzaSyD3k2•••F7I4"],["App ID","1:1400•••45"]].map(([l,v])=>(<div key={l} className="sprer"><span className="sprel">{l}</span><span className="sprev">{v}</span></div>))}
+    <div className="sw">
+      <div className="sb2">
+        {/* Logo + title */}
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <LogoParstriker size={72}/>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:28,letterSpacing:6,marginTop:10,
+            background:"linear-gradient(90deg,#FFD700,#00e5ff)",WebkitBackgroundClip:"text",
+            WebkitTextFillColor:"transparent",backgroundClip:"text"}}>PARSTRIKER</div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:12,letterSpacing:5,color:"var(--mut)",marginTop:2}}>AUCTION</div>
+        </div>
+
+        {/* Only field needed */}
+        {err&&<div className="serr">⚠ {err}</div>}
+        <div className="sfield">
+          <label className="slbl">Messaging Sender ID</label>
+          <input className="sinp" placeholder="Enter Sender ID" value={sid}
+            onChange={e=>setSid(e.target.value.trim())}
+            onKeyDown={e=>e.key==="Enter"&&save()} autoFocus/>
+        </div>
+
+        <button className="sbtn" onClick={save}>🔥 CONNECT &amp; LAUNCH</button>
       </div>
-      <div className="sdesc">Enter your <b>Messaging Sender ID</b>.<br/>Firebase Console → ⚙️ Project Settings → General → <b>Project number</b></div>
-      {err&&<div className="serr">⚠ {err}</div>}
-      <div className="sfield"><label className="slbl">Messaging Sender ID</label>
-        <input className="sinp" placeholder="e.g. 1400458016" value={sid} onChange={e=>setSid(e.target.value.trim())} onKeyDown={e=>e.key==="Enter"&&save()} autoFocus/>
-      </div>
-      <button className="sbtn" onClick={save}>🔥 CONNECT &amp; LAUNCH</button>
-      <div style={{marginTop:10,fontSize:10,color:"var(--mut)",textAlign:"center",lineHeight:1.7}}>Saved in browser · Enter once per device</div>
-    </div></div>
+    </div>
   );
 }
 
