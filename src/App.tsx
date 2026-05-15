@@ -37,14 +37,52 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 const PURSE=800; const MIN_BID=5; const MAX_SQUAD=11; const MAX_MARQUEE=9;
 const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=8;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
-const fmt=(v:number):string=>`$${v}`;
+const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#FFD700",Premium:"#00e5ff",Standard:"#69ff47"}[t]??"#aaa");
 
 // ─── CAPTAIN PLAYER IDs ───────────────────────────────────────────────────────
 const CAPTAIN_MAP:{[teamId:number]:number}={1:4,2:7,3:16}; // BI→Ashish(4), RK→Kannan(7), WW→Sandeep(16)
 
 // ─── PRICING ─────────────────────────────────────────────────────────────────
-const PLAYER_PRICES:Record<number,number>={1:70,2:50,3:45,4:90,5:75,6:50,7:100,8:55,9:80,10:70,11:45,12:65,13:75,14:70,15:50,16:90,17:40,18:50,19:60,20:45,21:40,22:45,23:55,24:65,25:50,26:60,27:75,28:60,29:55};
+// Player base points — All-Rounders highest, then Batting AR, Bowling AR, then Bat/Bowl/WK
+// Total budget per team: 800 pts for 11 players (incl. captain pre-assigned at 0)
+const PLAYER_PRICES:Record<number,number>={
+  // All-Rounders (Elite) — 70–100 pts
+  1:70,   // Abdul Mubeen
+  4:90,   // Ashish Nageet (Captain BI)
+  5:75,   // Janesh Chohan
+  7:100,  // Kannan Santharam (Captain RK)
+  9:80,   // Krunal Shah
+  10:70,  // Ravinder Negi
+  13:75,  // Pranay Raj
+  14:70,  // Rajat Mehrotra (AR/WK)
+  16:90,  // Sandeep Kirpane (Captain WW)
+  24:65,  // Vineet Shende
+  // Batting All-Rounders (Premium) — 60–80 pts
+  27:75,  // Raghav Ambati
+  // Bowling All-Rounders (Premium) — 55–70 pts
+  12:65,  // Pradeep Patil
+  19:60,  // Santosh Vaghmare
+  26:60,  // Aravind Kaluva
+  28:60,  // Karan Shah
+  // Batsmen — 40–60 pts
+  2:50,   // Amit Jadli (WK)
+  3:45,   // Anshul Dikshit
+  6:50,   // Jitendra Mistry
+  8:55,   // Karthik Vempati
+  11:45,  // Nikhil Surabhi
+  15:50,  // Sameer Saxena
+  18:50,  // Sanket Rana
+  20:45,  // Savan Paka
+  21:40,  // Sushil Page
+  23:55,  // Vikramjeet (WK)
+  25:50,  // Srini Vellingiri
+  29:45,  // Vibhor (WK)
+  30:45,  // Saravanan Marimuthu
+  // Bowlers — 35–45 pts
+  17:40,  // Sanjay Prajapati
+  22:45,  // Tushar More
+};
 
 // CricHeroes team page (fallback for players without individual profile ID)
 // ── CRICHEROES LINKS ─────────────────────────────────────────────────────────
@@ -61,7 +99,7 @@ const RAW_PLAYERS=[
   {id:7,  name:"Kannan Santharam",      role:"All-Rounder",           img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
   {id:8,  name:"Karthik Vempati",       role:"Batsman",               img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
   {id:9,  name:"Krunal Shah",           role:"All-Rounder",           img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
-  {id:10, name:"Mahendra Negi",         role:"All-Rounder",           img:"MN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
+  {id:10, name:"Ravinder Negi",         role:"All-Rounder",           img:"MN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
   {id:11, name:"Nikhil Surabhi",        role:"Batsman",               img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
   {id:12, name:"Pradeep Patil",         role:"Bowling All-Rounder",   img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
   {id:13, name:"Pranay Raj",            role:"All-Rounder",           img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
@@ -80,8 +118,8 @@ const RAW_PLAYERS=[
   {id:26, name:"Aravind Kaluva",        role:"Bowling All-Rounder",   img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
   {id:27, name:"Raghav Ambati",         role:"Batting All-Rounder",   img:"RA",   chUrl:"https://cricheroes.com/player-profile/50005907/raghav-ambati/matches"},
   {id:28, name:"Karan Shah",            role:"Bowling All-Rounder",   img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
-  {id:29, name:"Vibhor",               role:"Batsman / WK",           img:"VB",   chUrl:""},
-  {id:30, name:"Sarvanan Marimuthu",    role:"Batsman",               img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
+  {id:29, name:"Vibhor",                role:"Batsman / WK",          img:"VB",   chUrl:""},
+  {id:30, name:"Saravanan Marimuthu",   role:"Batsman",               img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
 ];
 const roleTier=(r:string):string=>r==="All-Rounder"?"Elite":r.includes("All-Rounder")?"Premium":"Standard";
 
@@ -95,7 +133,7 @@ const buildInitPlayers=():Player[]=>{
 };
 
 const buildInitTeams=():Team[]=>{
-  const captainPrices:{[id:number]:number}={4:90,7:100,16:90};
+  const captainPrices:{[id:number]:number}={4:90,7:100,16:90}; // pts pre-assigned
   const teamsBase=[
     {id:1,name:"Blue Indians",short:"BI",color:"#1a56db",accent:"#FFD700",captainPass:"ashish123",captainPlayerId:4},
     {id:2,name:"Red Knights",short:"RK",color:"#c41e3a",accent:"#FFD700",captainPass:"kannan123",captainPlayerId:7},
@@ -382,7 +420,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .cap-side{background:rgba(17,14,28,.9);border-left:1px solid var(--bd);overflow-y:auto;backdrop-filter:blur(10px)}
 
 /* Captain purse strip */
-.cap-purse-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.cap-pts-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
 .cap-stat{background:linear-gradient(145deg,#221e32,#1a1528);border:1px solid rgba(124,58,237,.2);border-radius:11px;padding:12px;text-align:center;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .cap-stat.glow-gold{border-color:rgba(167,139,250,.6);box-shadow:0 0 16px rgba(139,92,246,.2)}
 .cap-stat.glow-red{border-color:rgba(255,51,85,.5);box-shadow:0 0 16px rgba(255,51,85,.2)}
@@ -522,7 +560,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
   .cbd-amount{font-size:38px!important}
   /* Grids */
   .bg{grid-template-columns:repeat(3,1fr);gap:5px}
-  .cap-purse-strip{grid-template-columns:repeat(2,1fr)}
+  .cap-pts-strip{grid-template-columns:repeat(2,1fr)}
   .tgrid{grid-template-columns:1fr}
   .pgg{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
   .sqg{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
@@ -558,7 +596,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
   .lhero-parsippany{font-size:26px}
   .lhero-title{font-size:26px}
   .bg{grid-template-columns:repeat(3,1fr)}
-  .cap-purse-strip{grid-template-columns:repeat(2,1fr)}
+  .cap-pts-strip{grid-template-columns:repeat(2,1fr)}
   .pn{font-size:18px}
   .nt{padding:8px 6px;font-size:10px}
   .csv{font-size:18px}
@@ -940,7 +978,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
             <div className="rbe">{st.aRound===0?"WELCOME TO":"ROUND "+st.aRound+" COMPLETE"}</div>
             <div className="rbt">{st.aRound===0?"PARSTRIKER AUCTION":`ROUND ${st.aRound+1} OF ${TOTAL_ROUNDS}`}</div>
             <div className="rbd">
-              {st.aRound===0?`${auctionPlayers.length} players in pool · ${TOTAL_ROUNDS} rounds · ${teams.length} teams · Purse ${fmt(PURSE)} each`
+              {st.aRound===0?`${auctionPlayers.length} players · ${TOTAL_ROUNDS} rounds · ${teams.length} teams · ${fmt(PURSE)} budget each`
                 :`${auctionPlayers.filter(p=>p.soldTo===null).length} unsold players re-enter · Round ${st.aRound+1} of ${TOTAL_ROUNDS}`}
             </div>
             <button className="rbb" onClick={()=>onStartRound(st.aRound+1)}>{st.aRound===0?"⚡ START AUCTION":`▶ BEGIN ROUND ${st.aRound+1}`}</button>
@@ -972,7 +1010,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 <div className="pn">{curPlayer.name}</div>
                 <div className="pm">
                       <span className="ch">🏏 {curPlayer.role}</span>
-                      <span className="ch">Base {fmt(curPlayer.basePrice)}</span>
+                      <span className="ch">Base: {fmt(curPlayer.basePrice)}</span>
                       {(curPlayer.chUrl??"")&&(
                         <a href={curPlayer.chUrl} target="_blank" rel="noopener noreferrer"
                           style={{display:"inline-flex",alignItems:"center",gap:4,
@@ -986,7 +1024,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 <div className="bb">
                   <div className="bl">{st.curBidder!==null?"Current Bid":"Opening Price"}</div>
                   <div className="ba">{fmt(st.curBid)}</div>
-                  <div className="bs">+{fmt(MIN_BID)} per raise</div>
+                  <div className="bs">+{fmt(MIN_BID)} per raise · min bid: {fmt(curPlayer.basePrice)}</div>
                   {leadTeam&&<div className="bldr" style={{color:leadTeam.color}}>🔥 {leadTeam.name} leading</div>}
                 </div>
               </div>
@@ -1153,7 +1191,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
       {/* MAIN BIDDING AREA */}
       <div className="cap-main">
         {/* Purse stats strip */}
-        <div className="cap-purse-strip">
+        <div className="cap-pts-strip">
           <div className={`cap-stat ${pctLeft>50?"glow-gold":pctLeft<20?"glow-red":""}`}>
             <div className="csv" style={{color:pctLeft<20?"var(--ng)":"var(--gold)"}}>{fmt(myTeam.purse)}</div>
             <div className="csl">💰 Purse Left</div>
@@ -1220,7 +1258,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
             <div style={{fontFamily:"'Bebas Neue'",fontSize:30,letterSpacing:2,marginBottom:4,lineHeight:1.1}}>{curPlayer.name}</div>
             <div style={{display:"flex",justifyContent:"center",gap:7,flexWrap:"wrap",marginBottom:8}}>
               <span className="ch">{curPlayer.role}</span>
-              <span className="ch">Base {fmt(curPlayer.basePrice)}</span>
+              <span className="ch">Base: {fmt(curPlayer.basePrice)}</span>
             </div>
             {(curPlayer.chUrl??"")&&(
               <a href={curPlayer.chUrl} target="_blank" rel="noopener noreferrer"
@@ -1304,8 +1342,8 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
         <div className="cap-side-sec">
           <div className="cap-side-title">📊 Summary</div>
           <div style={{fontSize:11,color:"var(--mut)",lineHeight:2}}>
-            <div>Purse: <span style={{color:"var(--gold)",fontWeight:700}}>{fmt(myTeam.purse)}</span></div>
-            <div>Spent: <span style={{color:"var(--cyan)",fontWeight:700}}>{fmt(PURSE-myTeam.purse)}</span></div>
+            <div>Budget Left: <span style={{color:"var(--gold)",fontWeight:700}}>{fmt(myTeam.purse)}</span></div>
+            <div>Pts Spent: <span style={{color:"var(--cyan)",fontWeight:700}}>{fmt(PURSE-myTeam.purse)}</span></div>
             <div>Players: <span style={{color:"var(--txt)",fontWeight:700}}>{squad.length}/{MAX_SQUAD}</span></div>
             <div>Round: <span style={{color:"var(--warn)",fontWeight:700}}>{st.aRound>0?`R${st.aRound} of ${TOTAL_ROUNDS}`:"Not started"}</span></div>
           </div>
@@ -1527,7 +1565,7 @@ function AdminTeamCards({teams}:{teams:Team[]}){
         <div className="tfh" style={{borderBottom:`3px solid ${team.color}`}}>
           <div style={{position:"absolute",inset:0,background:`linear-gradient(135deg,${team.color}18,transparent)`,pointerEvents:"none"}}/>
           <TeamLogo teamId={team.id} size={44}/>
-          <div style={{flex:1}}><div className="tfn" style={{color:team.color}}>{team.name}</div><div style={{fontSize:10,color:"var(--mut)"}}>Purse: {fmt(team.purse)}</div></div>
+          <div style={{flex:1}}><div className="tfn" style={{color:team.color}}>{team.name}</div><div style={{fontSize:10,color:"var(--mut)"}}>Budget: {fmt(team.purse)}</div></div>
         </div>
         <div className="tfs">
           <div className="tv"><div className="tvv" style={{color:"var(--gold)"}}>{fmt(team.purse)}</div><div className="tvl">Left</div></div>
