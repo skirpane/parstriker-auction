@@ -1219,4 +1219,4 @@ function DoneScreen({teams}:{teams:Team[]}){return(
 );}
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2025 <span>SKIRPANE</span> · All Rights Reserved</div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved</div></div>);}
