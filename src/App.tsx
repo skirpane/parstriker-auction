@@ -1,13 +1,30 @@
 // src/App.tsx
 import { useState, useEffect, useCallback } from "react";
-import { db } from "./firebase";
+import { initializeApp } from "firebase/app";
 import {
+  getDatabase,
   ref,
   onValue,
   set,
   update,
   get,
 } from "firebase/database";
+
+// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+// Replace these values with YOUR Firebase project config
+// Get them: console.firebase.google.com → Project Settings → Your apps → </> Web
+// Import the functions you need from the SDKs you need
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD3k2c_0oX3C3f1nAqDRYidKYNCGJgF7I4",
+  authDomain: "parstriker-auction.firebaseapp.com",
+  databaseURL: "https://parstriker-auction-default-rtdb.firebaseio.com",
+  projectId: "parstriker-auction",
+  storageBucket: "parstriker-auction.firebasestorage.app",
+  messagingSenderId: "1400458016",
+  appId: "1:1400458016:web:b19f0b8d854f5a9df02545",
+  measurementId: "G-K3DN5P60EC"
+};
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type Role  = "login" | "admin" | "captain" | "viewer";
