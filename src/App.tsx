@@ -19,7 +19,7 @@ const saveCfg=(c:FBConfig)=>{try{localStorage.setItem(FB_STORE_KEY,JSON.stringif
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v6");
+const fbRef=()=>ref(getDb(),"psAuction_v7");
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
 const patchSt=async(p:Partial<AuctionState>)=>update(fbRef(),p);
@@ -35,7 +35,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=800; const MIN_BID=5; const MAX_SQUAD=11; const MAX_MARQUEE=9;
-const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=6;
+const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=7;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>v>=100?`₹${(v/100).toFixed(1)}Cr`:`₹${v}L`;
 const tc=(t:string):string=>({Elite:"#FFD700",Premium:"#00e5ff",Standard:"#69ff47"}[t]??"#aaa");
@@ -52,35 +52,36 @@ const PLAYER_PRICES:Record<number,number>={1:70,2:50,3:45,4:90,5:75,6:50,7:100,8
 // Leave "" if not known — the 🏏 button simply won't show for that player.
 // Example: "https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"
 const RAW_PLAYERS=[
-  {id:1,  name:"Abdul Mubeen",         role:"All-Rounder",           img:"AM",   chUrl:""},
-  {id:2,  name:"Amit Jadli",           role:"Batsman / WK",          img:"AJ",   chUrl:""},
-  {id:3,  name:"Anshul Dikshit",       role:"Batsman",               img:"AD",   chUrl:""},
-  {id:4,  name:"Ashish Negeet",        role:"All-Rounder",           img:"AN",   chUrl:""},
-  {id:5,  name:"Janesh Chohan",        role:"All-Rounder",           img:"JC",   chUrl:""},
-  {id:6,  name:"Jitendra Mistry",      role:"Batsman",               img:"JM",   chUrl:""},
-  {id:7,  name:"Kannan Santharam",     role:"All-Rounder",           img:"KS",   chUrl:""},
-  {id:8,  name:"Karthik Vempati",      role:"Batsman",               img:"KV",   chUrl:""},
-  {id:9,  name:"Krunal Shah",          role:"All-Rounder",           img:"KSh",  chUrl:""},
-  {id:10, name:"Mahendra Negi",        role:"All-Rounder",           img:"MN",   chUrl:""},
-  {id:11, name:"Nikhil Surabhi",       role:"Batsman",               img:"NS",   chUrl:""},
-  {id:12, name:"Pradeep Patil",        role:"Bowling All-Rounder",   img:"PP",   chUrl:""},
-  {id:13, name:"Pranay Raj",           role:"All-Rounder",           img:"PR",   chUrl:""},
-  {id:14, name:"Rajat Mehrotra",       role:"All-Rounder / WK",      img:"RM",   chUrl:""},
-  {id:15, name:"Sameer Saxena",        role:"Batsman",               img:"SS",   chUrl:""},
+  {id:1,  name:"Abdul Mubeen",         role:"All-Rounder",           img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
+  {id:2,  name:"Amit Jadli",           role:"Batsman / WK",          img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
+  {id:3,  name:"Anshul Dikshit",       role:"Batsman",               img:"AD",   chUrl:"https://cricheroes.com/player-profile/29553371/anshul-dikshit/matches"},
+  {id:4,  name:"Ashish Nageet",        role:"All-Rounder",           img:"AN",   chUrl:"https://cricheroes.com/player-profile/9793757/ashish-nageet/matches"},
+  {id:5,  name:"Janesh Chohan",        role:"All-Rounder",           img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
+  {id:6,  name:"Jitendra Mistry",      role:"Batsman",               img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
+  {id:7,  name:"Kannan Santharam",     role:"All-Rounder",           img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
+  {id:8,  name:"Karthik Vempati",      role:"Batsman",               img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
+  {id:9,  name:"Krunal Shah",          role:"All-Rounder",           img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
+  {id:10, name:"Mahendra Negi",        role:"All-Rounder",           img:"MN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
+  {id:11, name:"Nikhil Surabhi",       role:"Batsman",               img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
+  {id:12, name:"Pradeep Patil",        role:"Bowling All-Rounder",   img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
+  {id:13, name:"Pranay Raj",           role:"All-Rounder",           img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
+  {id:14, name:"Rajat Mehrotra",       role:"All-Rounder / WK",      img:"RM",   chUrl:"https://cricheroes.com/player-profile/9755522/rajat-mehrotra/matches"},
+  {id:15, name:"Sameer Saxena",        role:"Batsman",               img:"SS",   chUrl:"https://cricheroes.com/player-profile/9670658/sameer-saxena/matches"},
   {id:16, name:"Sandeep Kirpane",      role:"All-Rounder",           img:"SK",   chUrl:"https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"},
-  {id:17, name:"Sanjay Prajapati",     role:"Bowler",                img:"SP",   chUrl:""},
-  {id:18, name:"Sanket Rana",          role:"Batsman",               img:"SRa",  chUrl:""},
-  {id:19, name:"Santosh Vaghmare",     role:"Bowling All-Rounder",   img:"SV",   chUrl:""},
-  {id:20, name:"Savan Paka",           role:"Batsman",               img:"SPa",  chUrl:""},
-  {id:21, name:"Sushil Page",          role:"Batsman",               img:"SuP",  chUrl:""},
-  {id:22, name:"Tushar More",          role:"Bowler",                img:"TM",   chUrl:""},
-  {id:23, name:"Vikramjeet Sangavkar", role:"Batsman / WK",          img:"VS",   chUrl:""},
-  {id:24, name:"Vineet Shende",        role:"All-Rounder",           img:"VSh",  chUrl:""},
-  {id:25, name:"Srini Vellingiri",     role:"Batsman",               img:"SV2",  chUrl:""},
-  {id:26, name:"Aravind Kaluva",       role:"Bowling All-Rounder",   img:"AK",   chUrl:""},
-  {id:27, name:"Raghav Ambati",        role:"Batting All-Rounder",   img:"RA",   chUrl:""},
-  {id:28, name:"Karan Shah",           role:"Bowling All-Rounder",   img:"KSh2", chUrl:""},
+  {id:17, name:"Sanjay Prajapati",     role:"Bowler",                img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
+  {id:18, name:"Sanket Rana",          role:"Batsman",               img:"SRa",  chUrl:"https://cricheroes.com/player-profile/29553267/sanket-rana/matches"},
+  {id:19, name:"Santosh Vaghmare",     role:"Bowling All-Rounder",   img:"SV",   chUrl:"https://cricheroes.com/player-profile/15997501/santosh-waghmare/matches"},
+  {id:20, name:"Savan Paka",           role:"Batsman",               img:"SPa",  chUrl:"https://cricheroes.com/player-profile/7984823/savan/matches"},
+  {id:21, name:"Sushil Page",          role:"Batsman",               img:"SuP",  chUrl:"https://cricheroes.com/player-profile/30241439/sushil-page/matches"},
+  {id:22, name:"Tushar More",          role:"Bowler",                img:"TM",   chUrl:"https://cricheroes.com/player-profile/23108798/tushar-more/matches"},
+  {id:23, name:"Vikramjeet Sangavkar", role:"Batsman / WK",          img:"VS",   chUrl:"https://cricheroes.com/player-profile/29553277/vicky-sangavkar/matches"},
+  {id:24, name:"Vineet Shende",        role:"All-Rounder",           img:"VSh",  chUrl:"https://cricheroes.com/player-profile/30602888/vineet-shende/matches"},
+  {id:25, name:"Srini Vellingiri",     role:"Batsman",               img:"SV2",  chUrl:"https://cricheroes.com/player-profile/23196220/srini/matches"},
+  {id:26, name:"Aravind Kaluva",       role:"Bowling All-Rounder",   img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
+  {id:27, name:"Raghav Ambati",        role:"Batting All-Rounder",   img:"RA",   chUrl:"https://cricheroes.com/player-profile/50005907/raghav-ambati/matches"},
+  {id:28, name:"Karan Shah",           role:"Bowling All-Rounder",   img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
   {id:29, name:"Vibhor",               role:"Batsman / WK",          img:"VB",   chUrl:""},
+  {id:29, name:"Sarvanan Marimuthu",   role:"Batsman / WK",          img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
 ];
 const roleTier=(r:string):string=>r==="All-Rounder"?"Elite":r.includes("All-Rounder")?"Premium":"Standard";
 
@@ -287,11 +288,15 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .lw{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:16px;
   background:linear-gradient(160deg,#0e0c1a 0%,#13111e 40%,#1a1528 70%,#0e0c1a 100%)}
 .lhero{display:flex;flex-direction:column;align-items:center;margin-bottom:20px;gap:0}
-.lhero-headline{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
-.lhero-parsippany{font-family:'Bebas Neue';font-size:28px;letter-spacing:5px;color:#e2e8ff;font-weight:900}
-.lhero-title{font-family:'Bebas Neue';font-size:52px;letter-spacing:8px;
+.lhero-headline{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
+.lhero-parsippany{font-family:'Bebas Neue';font-size:48px;letter-spacing:6px;line-height:1;
   background:linear-gradient(90deg,#a78bfa,#818cf8,#38bdf8);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1}
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.lhero-sep{font-family:'Bebas Neue';font-size:48px;letter-spacing:0;line-height:1;
+  color:rgba(167,139,250,.3);margin:0 -4px}
+.lhero-title{font-family:'Bebas Neue';font-size:48px;letter-spacing:6px;line-height:1;
+  background:linear-gradient(90deg,#818cf8,#38bdf8,#a78bfa);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .lhero-tag{font-size:10px;color:var(--mut);letter-spacing:3px;margin-bottom:20px}
 .lhero-teams{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:24px;
   padding:14px 28px;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.2);
@@ -428,8 +433,8 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .pcr{font-size:9px;color:var(--mut);margin-bottom:5px;line-height:1.3}
 .pctb{font-size:8px;padding:2px 6px;border-radius:7px;background:rgba(255,255,255,.06);display:inline-block}
 .pcs{font-size:9px;color:var(--ok);font-weight:700;margin-top:4px} .pcb{font-size:9px;color:var(--mut);margin-top:3px}
-.ch-link{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:7px;padding:5px 0;background:rgba(124,58,237,.1);border:1px solid rgba(139,92,246,.3);border-radius:7px;color:var(--cyan);font-size:9px;font-weight:700;cursor:pointer;text-decoration:none;transition:all .2s;letter-spacing:.5px}
-.ch-link:hover{background:rgba(124,58,237,.2);border-color:var(--violet);transform:translateY(-1px)}
+.ch-link{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:8px;padding:7px 0;background:rgba(124,58,237,.1);border:1px solid rgba(139,92,246,.3);border-radius:8px;color:#a78bfa;font-size:10px;font-weight:700;cursor:pointer;text-decoration:none;transition:all .2s;letter-spacing:.5px;min-height:32px}
+.ch-link:hover{background:rgba(124,58,237,.22);border-color:#a78bfa;transform:translateY(-1px);color:#c4b5fd}
 
 /* TEAM CARDS */
 .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:16px;max-width:960px;margin:0 auto}
@@ -746,6 +751,7 @@ function LoginScreen({teams,onLogin}:{teams:Team[];onLogin:(r:Role,tid?:number)=
         {/* One-line headline: PARSIPPANY PARSTRIKER */}
         <div className="lhero-headline">
           <div className="lhero-parsippany">PARSIPPANY</div>
+          <div className="lhero-sep">·</div>
           <div className="lhero-title">PARSTRIKER</div>
         </div>
         <div className="lhero-tag">— UNLEASHING THE SPIRIT OF CRICKET —</div>
@@ -852,7 +858,19 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 <div className="tt" style={{color:tc(curPlayer.tier),borderColor:`${tc(curPlayer.tier)}44`}}>{curPlayer.tier} · {curPlayer.role}</div>
                 <div className="pav" style={{borderColor:tc(curPlayer.tier),background:`${tc(curPlayer.tier)}15`,color:tc(curPlayer.tier)}}>{curPlayer.img}</div>
                 <div className="pn">{curPlayer.name}</div>
-                <div className="pm"><span className="ch">🏏 {curPlayer.role}</span><span className="ch">Base {fmt(curPlayer.basePrice)}</span></div>
+                <div className="pm">
+                      <span className="ch">🏏 {curPlayer.role}</span>
+                      <span className="ch">Base {fmt(curPlayer.basePrice)}</span>
+                      {(curPlayer.chUrl??"")&&(
+                        <a href={curPlayer.chUrl} target="_blank" rel="noopener noreferrer"
+                          style={{display:"inline-flex",alignItems:"center",gap:4,
+                            padding:"3px 10px",background:"rgba(124,58,237,.12)",
+                            border:"1px solid rgba(139,92,246,.35)",borderRadius:14,
+                            color:"#a78bfa",fontSize:10,fontWeight:700,textDecoration:"none"}}>
+                          🏏 CricHeroes ↗
+                        </a>
+                      )}
+                    </div>
                 <div className="bb">
                   <div className="bl">{st.curBidder!==null?"Current Bid":"Opening Price"}</div>
                   <div className="ba">{fmt(st.curBid)}</div>
@@ -1072,10 +1090,18 @@ function CaptainView({myTeam,st,curPlayer,onBid,onLogout,canBid}:{
               {curPlayer.img}
             </div>
             <div style={{fontFamily:"'Bebas Neue'",fontSize:30,letterSpacing:2,marginBottom:4,lineHeight:1.1}}>{curPlayer.name}</div>
-            <div style={{display:"flex",justifyContent:"center",gap:7,flexWrap:"wrap"}}>
+            <div style={{display:"flex",justifyContent:"center",gap:7,flexWrap:"wrap",marginBottom:8}}>
               <span className="ch">{curPlayer.role}</span>
               <span className="ch">Base {fmt(curPlayer.basePrice)}</span>
             </div>
+            {(curPlayer.chUrl??"")&&(
+              <a href={curPlayer.chUrl} target="_blank" rel="noopener noreferrer"
+                style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:10,
+                  padding:"5px 16px",background:"rgba(124,58,237,.12)",border:"1px solid rgba(139,92,246,.35)",
+                  borderRadius:20,color:"#a78bfa",fontSize:10,fontWeight:700,textDecoration:"none",letterSpacing:.5}}>
+                🏏 View on CricHeroes ↗
+              </a>
+            )}
 
             {/* Big bid display */}
             <div className="cur-bid-display">
@@ -1208,13 +1234,15 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
             <span className="ch">{curPlayer.role}</span>
             <span className="ch">{curPlayer.tier}</span>
           </div>
-          <a href={curPlayer.chUrl??""} target="_blank" rel="noopener noreferrer"
-            style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:14,
-              padding:"5px 16px",background:"rgba(0,229,255,.08)",border:"1px solid rgba(0,229,255,.3)",
-              borderRadius:20,color:"var(--cyan)",fontSize:10,fontWeight:700,
-              textDecoration:"none",letterSpacing:.5,transition:"all .2s"}}>
-            🏏 View on CricHeroes ↗
-          </a>
+          {(curPlayer.chUrl??"")&&(
+            <a href={curPlayer.chUrl} target="_blank" rel="noopener noreferrer"
+              style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:14,
+                padding:"5px 16px",background:"rgba(124,58,237,.12)",border:"1px solid rgba(139,92,246,.35)",
+                borderRadius:20,color:"var(--violet)",fontSize:10,fontWeight:700,
+                textDecoration:"none",letterSpacing:.5}}>
+              🏏 View on CricHeroes ↗
+            </a>
+          )}
           {/* NO bid amount — show bidding status only */}
           <div style={{background:"rgba(14,12,26,.85)",border:"1px solid rgba(124,58,237,.25)",borderRadius:11,padding:16}}>
             <div style={{fontSize:9,color:"var(--mut)",textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Bidding in Progress</div>
