@@ -53,7 +53,7 @@ const PLAYER_PRICES:Record<number,number>={
   5:75,   // Janesh Chohan
   7:100,  // Kannan Santharam (Captain RK)
   9:80,   // Krunal Shah
-  10:70,  // Ravinder Negi
+  10:70,  // Mahendra Negi
   13:75,  // Pranay Raj
   14:70,  // Rajat Mehrotra (AR/WK)
   16:90,  // Sandeep Kirpane (Captain WW)
@@ -78,7 +78,7 @@ const PLAYER_PRICES:Record<number,number>={
   23:55,  // Vikramjeet (WK)
   25:50,  // Srini Vellingiri
   29:45,  // Vibhor (WK)
-  30:45,  // Saravanan Marimuthu
+  30:45,  // Sarvanan Marimuthu
   // Bowlers — 35–45 pts
   17:40,  // Sanjay Prajapati
   22:45,  // Tushar More
@@ -92,34 +92,35 @@ const PLAYER_PRICES:Record<number,number>={
 const RAW_PLAYERS=[
   {id:1,  name:"Abdul Mubeen",          role:"All-Rounder",           img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
   {id:2,  name:"Amit Jadli",            role:"Batsman / WK",          img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
-  {id:3,  name:"Anshul Dikshit",        role:"Batsman",               img:"AD",   chUrl:"https://cricheroes.com/player-profile/29553371/anshul-dikshit/matches"},
+  {id:3,  name:"Aravind",               role:"Bowling All-Rounder",   img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
   {id:4,  name:"Ashish Nageet",         role:"All-Rounder",           img:"AN",   chUrl:"https://cricheroes.com/player-profile/9793757/ashish-nageet/matches"},
-  {id:5,  name:"Janesh Chohan",         role:"All-Rounder",           img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
-  {id:6,  name:"Jitendra Mistry",       role:"Batsman",               img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
-  {id:7,  name:"Kannan Santharam",      role:"All-Rounder",           img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
-  {id:8,  name:"Karthik Vempati",       role:"Batsman",               img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
-  {id:9,  name:"Krunal Shah",           role:"All-Rounder",           img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
-  {id:10, name:"Ravinder Negi",         role:"All-Rounder",           img:"MN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
-  {id:11, name:"Nikhil Surabhi",        role:"Batsman",               img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
-  {id:12, name:"Pradeep Patil",         role:"Bowling All-Rounder",   img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
-  {id:13, name:"Pranay Raj",            role:"All-Rounder",           img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
-  {id:14, name:"Rajat Mehrotra",        role:"All-Rounder / WK",      img:"RM",   chUrl:"https://cricheroes.com/player-profile/9755522/rajat-mehrotra/matches"},
-  {id:15, name:"Sameer Saxena",         role:"Batsman",               img:"SS",   chUrl:"https://cricheroes.com/player-profile/9670658/sameer-saxena/matches"},
-  {id:16, name:"Sandeep Kirpane",       role:"All-Rounder",           img:"SK",   chUrl:"https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"},
-  {id:17, name:"Sanjay Prajapati",      role:"Bowler",                img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
-  {id:18, name:"Sanket Rana",           role:"Batsman",               img:"SRa",  chUrl:"https://cricheroes.com/player-profile/29553267/sanket-rana/matches"},
-  {id:19, name:"Santosh Vaghmare",      role:"Bowling All-Rounder",   img:"SV",   chUrl:"https://cricheroes.com/player-profile/15997501/santosh-waghmare/matches"},
-  {id:20, name:"Savan Paka",            role:"Batsman",               img:"SPa",  chUrl:"https://cricheroes.com/player-profile/7984823/savan/matches"},
-  {id:21, name:"Sushil Page",           role:"Batsman",               img:"SuP",  chUrl:"https://cricheroes.com/player-profile/30241439/sushil-page/matches"},
-  {id:22, name:"Tushar More",           role:"Bowler",                img:"TM",   chUrl:"https://cricheroes.com/player-profile/23108798/tushar-more/matches"},
-  {id:23, name:"Vikramjeet Sangavkar",  role:"Batsman / WK",          img:"VS",   chUrl:"https://cricheroes.com/player-profile/29553277/vicky-sangavkar/matches"},
-  {id:24, name:"Vineet Shende",         role:"All-Rounder",           img:"VSh",  chUrl:"https://cricheroes.com/player-profile/30602888/vineet-shende/matches"},
-  {id:25, name:"Srini Vellingiri",      role:"Batsman",               img:"SV2",  chUrl:"https://cricheroes.com/player-profile/23196220/srini/matches"},
-  {id:26, name:"Aravind Kaluva",        role:"Bowling All-Rounder",   img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
+  {id:5,  name:"Hari Reddy",            role:"Bowling",               img:"HR",   chUrl:"https://cricheroes.com/player-profile/16012495/hari-reddy-m/matches"},
+  {id:6,  name:"Janesh Chohan",         role:"All-Rounder",           img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
+  {id:7,  name:"Jitendra Mistry",       role:"Batsman",               img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
+  {id:8,  name:"Kannan Santharam",      role:"All-Rounder",           img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
+  {id:9,  name:"Karthik Vempati",       role:"Batsman",               img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
+  {id:10,  name:"Krunal Shah",          role:"All-Rounder",          img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
+  {id:11, name:"Ravinder Negi",         role:"All-Rounder",           img:"MN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
+  {id:12, name:"Nikhil Surabhi",        role:"Batsman",               img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
+  {id:13, name:"Pradeep Patil",         role:"Bowling All-Rounder",   img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
+  {id:14, name:"Pranay Raj",            role:"All-Rounder",           img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
+  {id:15, name:"Rajat Mehrotra",        role:"All-Rounder / WK",      img:"RM",   chUrl:"https://cricheroes.com/player-profile/9755522/rajat-mehrotra/matches"},
+  {id:16, name:"Sameer Saxena",         role:"Batsman",               img:"SS",   chUrl:"https://cricheroes.com/player-profile/9670658/sameer-saxena/matches"},
+  {id:17, name:"Sandeep Kirpane",       role:"All-Rounder",           img:"SK",   chUrl:"https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"},
+  {id:18, name:"Sanjay Prajapati",      role:"Bowler",                img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
+  {id:19, name:"Sanket Rana",           role:"Batsman",               img:"SRa",  chUrl:"https://cricheroes.com/player-profile/29553267/sanket-rana/matches"},
+  {id:20, name:"Santosh Vaghmare",      role:"Bowling All-Rounder",   img:"SV",   chUrl:"https://cricheroes.com/player-profile/15997501/santosh-waghmare/matches"},
+  {id:21, name:"Savan Paka",            role:"Batsman",               img:"SPa",  chUrl:"https://cricheroes.com/player-profile/7984823/savan/matches"},
+  {id:22, name:"Sushil Page",           role:"Batsman",               img:"SuP",  chUrl:"https://cricheroes.com/player-profile/30241439/sushil-page/matches"},
+  {id:23, name:"Tushar More",           role:"Bowler",                img:"TM",   chUrl:"https://cricheroes.com/player-profile/23108798/tushar-more/matches"},
+  {id:24, name:"Vikramjeet Sangavkar",  role:"Batsman / WK",          img:"VS",   chUrl:"https://cricheroes.com/player-profile/29553277/vicky-sangavkar/matches"},
+  {id:25, name:"Vineet Shende",         role:"All-Rounder",           img:"VSh",  chUrl:"https://cricheroes.com/player-profile/30602888/vineet-shende/matches"},
+  {id:26, name:"Srini Vellingiri",      role:"Batsman",               img:"SV2",  chUrl:"https://cricheroes.com/player-profile/23196220/srini/matches"},
   {id:27, name:"Raghav Ambati",         role:"Batting All-Rounder",   img:"RA",   chUrl:"https://cricheroes.com/player-profile/50005907/raghav-ambati/matches"},
   {id:28, name:"Karan Shah",            role:"Bowling All-Rounder",   img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
-  {id:29, name:"Vibhor",                role:"Batsman / WK",          img:"VB",   chUrl:""},
-  {id:30, name:"Saravanan Marimuthu",   role:"Batsman",               img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
+  {id:29, name:"Vibhor",                role:"Batsman",               img:"VB",   chUrl:"https://cricheroes.com/player-profile/33203217/vibhor-k-(wk)/matches"},
+  {id:30, name:"Sarvanan Marimuthu",    role:"Batsman",               img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
+  
 ];
 const roleTier=(r:string):string=>r==="All-Rounder"?"Elite":r.includes("All-Rounder")?"Premium":"Standard";
 
@@ -277,7 +278,7 @@ const CSS=`
   --indigo:#4f46e5;   /* Deep indigo */
   --violet:#8b5cf6;   /* Medium violet */
 }
-body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
+body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;overflow-y:auto;-webkit-font-smoothing:antialiased;}
 
 /* SETUP */
 .sw{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;
@@ -311,19 +312,19 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .hlw{display:flex;align-items:center;gap:10px}
 .hl{font-family:'Bebas Neue';font-size:20px;letter-spacing:3px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1}
 .hl-sub{font-size:9px;color:var(--mut);letter-spacing:2px;font-family:'Rajdhani'}
-.hr{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.hr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
 .rp{padding:3px 11px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border:1px solid}
 .xb{background:transparent;border:1px solid var(--bd);color:var(--mut);padding:5px 12px;border-radius:7px;cursor:pointer;font-size:11px;transition:all .2s}
 .xb:hover{border-color:var(--ng);color:var(--ng)}
 .nb{background:transparent;border:1px solid var(--ng);color:var(--ng);padding:5px 12px;border-radius:7px;cursor:pointer;font-size:11px}
 
 /* NAV */
-.nav{background:rgba(19,17,30,.9);border-bottom:1px solid var(--bd);padding:0 18px;display:flex;gap:2px;overflow-x:auto;backdrop-filter:blur(10px)}
+.nav{background:rgba(19,17,30,.9);border-bottom:1px solid var(--bd);padding:0 18px;display:flex;gap:2px;overflow-x:auto;overflow-y:hidden;backdrop-filter:blur(10px);scrollbar-width:none;-ms-overflow-style:none}.nav::-webkit-scrollbar{display:none}
 .nt{background:transparent;border:none;color:var(--mut);padding:12px 14px;cursor:pointer;font-family:'Rajdhani';font-weight:700;font-size:12px;letter-spacing:1px;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
 .nt:hover{color:var(--txt)} .nt.on{color:var(--gold);border-bottom-color:var(--gold)}
 
 /* LOGIN */
-.lw{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:16px;
+.lw{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:16px;overflow-y:auto;
   background:linear-gradient(160deg,#0e0c1a 0%,#13111e 40%,#1a1528 70%,#0e0c1a 100%)}
 .lhero{display:flex;flex-direction:column;align-items:center;margin-bottom:20px;gap:0}
 .lhero-headline{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
@@ -356,7 +357,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .ht{margin-top:12px;font-size:10px;color:var(--mut);line-height:1.8;text-align:center}
 
 /* ROUND BANNER */
-.rbn{text-align:center;padding:36px 24px;max-width:580px;margin:0 auto;background:linear-gradient(180deg,rgba(15,31,61,.0),transparent)}
+.rbn{text-align:center;padding:36px 24px;max-width:580px;margin:0 auto;width:100%;box-sizing:border-box}
 .rbe{font-family:'Rajdhani';font-size:11px;letter-spacing:4px;color:var(--mut);text-transform:uppercase;margin-bottom:8px}
 .rbt{font-family:'Bebas Neue';font-size:52px;letter-spacing:5px;margin-bottom:10px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .rbd{color:var(--mut);font-size:13px;margin-bottom:24px;line-height:1.7}
@@ -364,25 +365,25 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .rbb:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(124,58,237,.5)}
 
 /* AUCTION LAYOUT */
-.al{display:grid;grid-template-columns:1fr 300px;min-height:calc(100vh - 108px)}
-.stg{padding:18px;overflow-y:auto;background:linear-gradient(180deg,#17132a 0%,#13111e 100%)}
+.al{display:grid;grid-template-columns:1fr 300px;min-height:0}
+.stg{padding:18px;overflow-y:auto;overflow-x:hidden;background:linear-gradient(180deg,#17132a 0%,#13111e 100%)}
 .st{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
 .rpill{padding:4px 12px;border-radius:20px;font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:1px;background:rgba(255,215,0,.1);color:var(--gold);border:1px solid rgba(255,215,0,.3)}
 .pb{background:rgba(255,255,255,.08);border-radius:4px;height:4px;width:140px;margin-top:4px}
 .pf{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--gold),var(--cyan));transition:width .5s}
-.spl{background:linear-gradient(145deg,rgba(34,30,50,.95),rgba(26,22,42,.95));border:1px solid rgba(124,58,237,.25);border-radius:20px;padding:24px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.spl{background:linear-gradient(145deg,rgba(34,30,50,.95),rgba(26,22,42,.95));border:1px solid rgba(124,58,237,.25);border-radius:20px;padding:24px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3);width:100%;box-sizing:border-box}
 .spl::before{content:'';position:absolute;top:-40%;left:-20%;width:140%;height:140%;background:radial-gradient(ellipse,rgba(255,215,0,.04),transparent 55%);pointer-events:none}
 .tt{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border-radius:20px;padding:4px 12px;margin-bottom:12px;font-size:10px;font-weight:700;letter-spacing:1.5px;border:1px solid}
 .pav{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:18px;margin:0 auto 10px;border:3px solid}
 .pn{font-family:'Bebas Neue';font-size:32px;letter-spacing:3px;line-height:1;margin-bottom:8px}
-.pm{display:flex;justify-content:center;gap:7px;margin-bottom:14px;flex-wrap:wrap}
+.pm{display:flex;justify-content:center;gap:6px;margin-bottom:12px;flex-wrap:wrap;width:100%}
 .ch{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:3px 10px;font-size:11px;color:var(--txt)}
 .bb{background:rgba(14,12,26,.8);border:1px solid rgba(139,92,246,.2);border-radius:12px;padding:14px;margin-bottom:14px}
 .bl{font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2px}
 .ba{font-family:'Bebas Neue';font-size:44px;letter-spacing:2px;line-height:1;background:linear-gradient(90deg,var(--gold),#ff9900);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .bs{font-size:11px;color:var(--mut);margin-top:2px}
 .bldr{font-family:'Rajdhani';font-size:13px;font-weight:700;margin-top:5px}
-.bg{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px}
+.bg{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px;width:100%}
 .tbb{padding:10px 7px;border-radius:10px;border:2px solid;cursor:pointer;font-family:'Rajdhani';font-weight:700;font-size:11px;transition:all .2s;text-align:left}
 .tbb:disabled{opacity:.25;cursor:not-allowed} .tbb:not(:disabled):hover{transform:translateY(-2px)}
 .tdg{font-family:'Bebas Neue';font-size:11px;letter-spacing:1.5px;padding:2px 5px;border-radius:3px}
@@ -401,7 +402,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 @keyframes zi{from{transform:scale(.3) rotate(-5deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
 
 /* SIDEBAR */
-.sb{background:rgba(17,14,28,.9);border-left:1px solid var(--bd);overflow-y:auto;max-height:calc(100vh - 108px);backdrop-filter:blur(10px)}
+.sb{background:rgba(17,14,28,.9);border-left:1px solid var(--bd);overflow-y:auto;max-height:calc(100vh - 65px);backdrop-filter:blur(10px)}
 .ss{padding:12px;border-bottom:1px solid rgba(56,189,248,.1)}
 .sbt{font-family:'Rajdhani';font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--mut);margin-bottom:10px}
 .tc{background:rgba(34,30,50,.6);border-radius:9px;padding:10px;margin-bottom:6px;border:1px solid rgba(124,58,237,.15);transition:all .2s}
@@ -415,12 +416,12 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .li{font-size:11px;flex-shrink:0;margin-top:1px} .lt{font-size:10px;line-height:1.4;flex:1} .ltime{font-size:8px;color:var(--mut)}
 
 /* ─── CAPTAIN DASHBOARD ─── */
-.cap-layout{display:grid;grid-template-columns:1fr 280px;min-height:calc(100vh - 108px);max-height:calc(100vh - 108px);overflow:hidden}
-.cap-main{padding:16px;overflow-y:auto;background:linear-gradient(180deg,#17132a 0%,#13111e 100%)}
-.cap-side{background:rgba(17,14,28,.9);border-left:1px solid var(--bd);overflow-y:auto;backdrop-filter:blur(10px)}
+.cap-layout{display:grid;grid-template-columns:1fr 280px;min-height:0;overflow:visible}
+.cap-main{padding:16px;overflow-y:auto;overflow-x:hidden;background:linear-gradient(180deg,#17132a 0%,#13111e 100%)}
+.cap-side{background:rgba(17,14,28,.9);border-left:1px solid var(--bd);overflow-y:auto;max-height:calc(100vh - 65px);backdrop-filter:blur(10px)}
 
 /* Captain purse strip */
-.cap-pts-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.cap-pts-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px;width:100%}
 .cap-stat{background:linear-gradient(145deg,#221e32,#1a1528);border:1px solid rgba(124,58,237,.2);border-radius:11px;padding:12px;text-align:center;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .cap-stat.glow-gold{border-color:rgba(167,139,250,.6);box-shadow:0 0 16px rgba(139,92,246,.2)}
 .cap-stat.glow-red{border-color:rgba(255,51,85,.5);box-shadow:0 0 16px rgba(255,51,85,.2)}
@@ -459,11 +460,11 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .cap-sq-price{font-family:'Rajdhani';font-weight:700;font-size:11px;color:var(--gold)}
 
 /* PLAYER POOL */
-.pgw{padding:14px;max-width:1000px;margin:0 auto}
+.pgw{padding:14px;max-width:1000px;margin:0 auto;width:100%;box-sizing:border-box}
 .fr{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
 .fb{background:rgba(255,255,255,.04);border:1px solid var(--bd);color:var(--mut);padding:4px 11px;border-radius:14px;cursor:pointer;font-size:11px;transition:all .2s}
 .fb.on,.fb:hover{border-color:var(--gold);color:var(--gold);background:rgba(255,215,0,.06)}
-.pgg{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px}
+.pgg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;width:100%}
 .pc{background:linear-gradient(145deg,#221e32,#1a1528);border:1px solid rgba(124,58,237,.15);border-radius:11px;padding:12px;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .pc:hover{border-color:rgba(139,92,246,.4);transform:translateY(-2px);box-shadow:0 6px 18px rgba(124,58,237,.15)} .pc.sp{opacity:.5}
 .pcav{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:10px;border:2px solid;margin-bottom:7px}
@@ -475,7 +476,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .ch-link:hover{background:rgba(124,58,237,.22);border-color:#a78bfa;transform:translateY(-1px);color:#c4b5fd}
 
 /* TEAM CARDS */
-.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:16px;max-width:960px;margin:0 auto}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:14px;padding:16px;max-width:960px;margin:0 auto;width:100%}
 .tfc{border-radius:14px;overflow:hidden;border:1px solid rgba(124,58,237,.15);background:linear-gradient(145deg,#221e32,#1a1528);transition:all .3s;box-shadow:0 4px 20px rgba(0,0,0,.25)}
 .tfc:hover{transform:translateY(-3px)}
 .tfh{padding:14px 16px;display:flex;align-items:center;gap:12px;position:relative;overflow:hidden}
@@ -502,7 +503,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .overlay-backdrop{position:fixed;inset:0;background:rgba(8,6,18,.92);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fi .3s ease;backdrop-filter:blur(12px)}
 
 /* Viewer sold popup */
-.viewer-sold-popup{background:linear-gradient(145deg,#221e32,#13111e);border:2px solid;border-radius:22px;padding:32px 28px;text-align:center;max-width:360px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.viewer-sold-popup{background:linear-gradient(145deg,#221e32,#13111e);border:2px solid;border-radius:22px;padding:24px 20px;text-align:center;max-width:360px;width:calc(100% - 32px);position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
 @keyframes popIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
 .vsp-player{font-family:'Bebas Neue';font-size:36px;letter-spacing:3px;margin:12px 0 6px;line-height:1}
 .vsp-role{font-size:12px;color:var(--mut);margin-bottom:16px}
@@ -511,7 +512,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .vsp-close{margin-top:20px;padding:10px 28px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:var(--txt);font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;cursor:pointer}
 
 /* Captain celebration popup */
-.cap-celeb-popup{background:linear-gradient(145deg,#0d2818,#17132a);border:2px solid var(--ok);border-radius:24px;padding:36px 30px;text-align:center;max-width:420px;width:100%;position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 50px rgba(52,211,153,.25);overflow:hidden}
+.cap-celeb-popup{background:linear-gradient(145deg,#0d2818,#17132a);border:2px solid var(--ok);border-radius:24px;padding:28px 22px;text-align:center;max-width:420px;width:calc(100% - 32px);position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 50px rgba(52,211,153,.25);overflow:hidden;max-height:90vh;overflow-y:auto}
 .celeb-rain{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;overflow:hidden}
 .celeb-emoji{position:absolute;font-size:22px;animation:emojiRain linear infinite;opacity:0}
 @keyframes emojiRain{0%{transform:translateY(-30px) rotate(0deg);opacity:1}100%{transform:translateY(500px) rotate(360deg);opacity:0}}
@@ -540,66 +541,170 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 
 /* ─── RESPONSIVE ─────────────────────────────────────────────── */
 /* Tablet */
+/* ─── FLUID BASE — all layouts use flexible units ─── */
+html{font-size:16px}
+
+/* ─── TABLET 900px ─── */
 @media(max-width:900px){
-  .tgrid{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+  .tgrid{grid-template-columns:repeat(2,1fr);gap:12px;padding:12px}
   .pgg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
   .sqg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .al{grid-template-columns:1fr 260px}
+  .cap-layout{grid-template-columns:1fr 240px}
+  .rbn{padding:24px 16px}
+  .rbt{font-size:40px}
 }
-/* Mobile landscape + small tablets */
-@media(max-width:680px){
-  /* Auction layout stacks */
-  .al{grid-template-columns:1fr;min-height:unset}
-  .sb{max-height:240px;border-left:none;border-top:1px solid var(--bd)}
-  /* Captain layout stacks */
-  .cap-layout{grid-template-columns:1fr;min-height:unset}
-  .cap-side{max-height:260px;border-left:none;border-top:1px solid var(--bd)}
-  /* Text scaling */
-  .pn{font-size:22px;letter-spacing:2px}
-  .ba{font-size:30px}
-  .ba-amount,.bid-amt{font-size:30px}
-  .cbd-amount{font-size:38px!important}
+
+/* ─── SMALL TABLET / LARGE PHONE 768px ─── */
+@media(max-width:768px){
+  /* Layouts stack vertically */
+  .al{grid-template-columns:1fr;min-height:unset;overflow:visible}
+  .sb{max-height:none;border-left:none;border-top:1px solid var(--bd);overflow:visible}
+  .ls{max-height:160px}
+  .cap-layout{grid-template-columns:1fr;min-height:unset;overflow:visible}
+  .cap-side{max-height:none;border-left:none;border-top:1px solid var(--bd);overflow:visible}
   /* Grids */
   .bg{grid-template-columns:repeat(3,1fr);gap:5px}
-  .cap-pts-strip{grid-template-columns:repeat(2,1fr)}
-  .tgrid{grid-template-columns:1fr}
-  .pgg{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
-  .sqg{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
-  /* Nav */
-  .nt{padding:10px 8px;font-size:11px;letter-spacing:.5px}
-  /* Header */
-  .hdr{padding:8px 12px;flex-wrap:wrap;gap:6px}
-  .hl{font-size:16px;letter-spacing:2px}
-  /* Login hero */
-  .lhero-parsippany{font-size:32px;letter-spacing:4px}
-  .lhero-title{font-size:32px;letter-spacing:4px}
-  .lhero-teams{gap:10px;padding:12px 16px}
-  .lb{padding:20px 16px}
-  /* Team cards */
-  .tfh{padding:12px}
-  .tfs{padding:0 12px 10px;gap:5px}
-  /* Bid stage */
-  .bid-stage{padding:14px}
+  .tgrid{grid-template-columns:1fr;gap:10px;padding:10px}
+  .pgg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .sqg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .cap-pts-strip{grid-template-columns:repeat(2,2fr) repeat(2,1fr)}
+  /* Type scaling */
+  .pn{font-size:24px;letter-spacing:2px}
+  .ba{font-size:32px}
+  .cbd-amount{font-size:40px!important}
+  .rbt{font-size:36px;letter-spacing:3px}
+  /* Components */
+  .hdr{padding:8px 14px}
+  .hl{font-size:17px;letter-spacing:2px}
+  .hl-sub{display:none}
+  .nav{padding:0 10px}
+  .nt{padding:11px 10px;font-size:12px;letter-spacing:.5px}
   .stg{padding:12px}
   .cap-main{padding:12px}
-  /* Spotlight */
   .spl{padding:16px;margin-bottom:10px}
-  /* Action row */
+  .bid-stage{padding:14px}
+  .bb{padding:11px;margin-bottom:10px}
   .ar{gap:6px}
-  .sdb,.usb{padding:10px;font-size:16px}
-  /* Sidebar */
+  .sdb,.usb{padding:11px;font-size:17px}
   .ss{padding:10px}
-  /* Bg grid = 2 cols on mobile for 3 teams */
-  .bg{grid-template-columns:repeat(3,1fr)}
+  .tfs{gap:5px;padding:0 10px 10px}
+  .tfh{padding:12px}
+  /* Login */
+  .lhero-parsippany{font-size:34px;letter-spacing:4px}
+  .lhero-title{font-size:34px;letter-spacing:4px}
+  .lhero-teams{gap:12px;padding:14px 16px}
+  .lb{padding:22px 20px}
 }
-/* Small phones */
-@media(max-width:380px){
-  .lhero-parsippany{font-size:26px}
-  .lhero-title{font-size:26px}
-  .bg{grid-template-columns:repeat(3,1fr)}
-  .cap-pts-strip{grid-template-columns:repeat(2,1fr)}
-  .pn{font-size:18px}
-  .nt{padding:8px 6px;font-size:10px}
+
+/* ─── MOBILE 480px ─── */
+@media(max-width:480px){
+  /* Header compact */
+  .hdr{padding:7px 10px;gap:5px}
+  .hlw{gap:7px}
+  .hl{font-size:15px;letter-spacing:1.5px}
+  .hr{gap:5px}
+  .rp{display:none}
+  .xb,.nb{padding:5px 8px;font-size:10px}
+  /* Nav scrollable tight */
+  .nav{padding:0 6px;gap:1px}
+  .nt{padding:10px 8px;font-size:11px;letter-spacing:0}
+  /* Auction stage */
+  .stg{padding:8px}
+  .spl{padding:12px;border-radius:14px}
+  .pav{width:64px;height:64px;font-size:15px}
+  .pn{font-size:20px;letter-spacing:1.5px;margin-bottom:5px}
+  .pm{gap:5px;margin-bottom:10px}
+  .ch{padding:3px 8px;font-size:10px}
+  .tt{font-size:9px;padding:3px 10px;margin-bottom:8px}
+  .bb{padding:10px;margin-bottom:10px;border-radius:10px}
+  .bl{font-size:8px}
+  .ba{font-size:28px}
+  .bs{font-size:10px}
+  /* Bid buttons — 3 cols always */
+  .bg{grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:7px}
+  .tbb{padding:8px 5px;border-radius:8px;font-size:10px}
+  .ar{gap:5px}
+  .sdb{font-size:16px;padding:10px;border-radius:9px}
+  .usb{font-size:16px;padding:10px;border-radius:9px}
+  /* Sidebar */
+  .sb{max-height:200px}
+  .sbt{font-size:8px;margin-bottom:8px}
+  .tc{padding:8px;margin-bottom:5px}
+  .sc{font-size:8px}
+  .lt{font-size:9px}
+  .lr{padding:4px 0}
+  /* Captain */
+  .cap-pts-strip{grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:12px}
+  .cs{padding:9px 6px}
   .csv{font-size:18px}
+  .csl{font-size:7px}
+  .bid-stage{padding:12px;border-radius:14px;margin-bottom:12px}
+  .cbd-amount{font-size:34px!important}
+  .cbb{font-size:18px;padding:14px;letter-spacing:2px}
+  .cap-main{padding:8px}
+  .cap-side-sec{padding:10px}
+  .cap-side-title{font-size:8px;margin-bottom:8px}
+  .cap-sq-name{font-size:10px}
+  .cap-sq-role{font-size:8px}
+  .cap-sq-price{font-size:10px}
+  /* Login */
+  .lhero-parsippany{font-size:26px;letter-spacing:3px}
+  .lhero-title{font-size:26px;letter-spacing:3px}
+  .lhero-sep{font-size:26px}
+  .lhero-tag{font-size:9px;letter-spacing:2px}
+  .lhero-teams{flex-wrap:wrap;gap:8px;padding:10px}
+  .lhero-team-name{font-size:8px;letter-spacing:1px}
+  .lb{padding:16px 14px;border-radius:16px}
+  .ls{font-size:11px;margin-bottom:14px}
+  .rg{gap:6px}
+  .rb{padding:12px 6px;border-radius:10px}
+  .ri{font-size:20px;margin-bottom:3px}
+  .rn{font-size:12px}
+  .rh{font-size:8px}
+  .inp{padding:10px 12px;font-size:13px}
+  .gb{padding:12px;font-size:17px}
+  /* Teams / Players grid */
+  .tgrid{grid-template-columns:1fr;gap:8px;padding:8px}
+  .pgg{grid-template-columns:repeat(2,1fr);gap:6px}
+  .sqg{grid-template-columns:repeat(2,1fr);gap:6px}
+  .pgw{padding:8px}
+  .fr{gap:4px;margin-bottom:10px}
+  .fb{font-size:10px;padding:4px 9px}
+  .pc{padding:10px}
+  .pcav{width:34px;height:34px;font-size:9px}
+  .pcn{font-size:12px}
+  .pcr{font-size:8px}
+  /* Round banner */
+  .rbn{padding:20px 12px}
+  .rbt{font-size:28px;letter-spacing:2px}
+  .rbb{padding:12px 28px;font-size:18px;letter-spacing:2px}
+  .rbd{font-size:12px;margin-bottom:18px}
+  /* Popups */
+  .viewer-sold-popup{padding:24px 18px;border-radius:16px}
+  .vsp-player{font-size:28px}
+  .cap-celeb-popup{padding:24px 18px;border-radius:18px}
+  .celeb-title{font-size:32px;letter-spacing:3px}
+  .celeb-player{font-size:24px}
+  /* Misc */
+  .done{padding:28px 12px}
+  .dtl{font-size:32px;letter-spacing:3px}
+  .rbe{font-size:9px;letter-spacing:2px}
+  .vtk{padding:7px 10px;gap:7px}
+  .vtxt{font-size:10px}
+}
+
+/* ─── TINY PHONES 360px ─── */
+@media(max-width:360px){
+  .lhero-parsippany,.lhero-title{font-size:22px;letter-spacing:2px}
+  .nt{padding:8px 5px;font-size:10px}
+  .pgg,.sqg{grid-template-columns:1fr}
+  .bg{grid-template-columns:repeat(3,1fr);gap:3px}
+  .tbb{padding:7px 4px;font-size:9px}
+  .csv{font-size:16px}
+  .ba{font-size:24px}
+  .sdb,.usb{font-size:14px;padding:9px}
+  .cbb{font-size:16px;padding:12px}
 }
 `;
 
@@ -1214,7 +1319,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
         </div>
 
         {/* ALL OTHER TEAMS' PURSES */}
-        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8,marginBottom:16}}>
           {allTeams.filter(t=>t.id!==myTeam.id).map(t=>{
             const pct=(t.purse/PURSE)*100;
             const isLead=t.id===st.curBidder;
