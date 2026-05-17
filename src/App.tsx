@@ -19,7 +19,7 @@ const saveCfg=(c:FBConfig)=>{try{localStorage.setItem(FB_STORE_KEY,JSON.stringif
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v9");
+const fbRef=()=>ref(getDb(),"psAuction_v10");
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
 const patchSt=async(p:Partial<AuctionState>)=>update(fbRef(),p);
@@ -35,7 +35,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=500; const MIN_BID=5; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=9;
+const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=10;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -73,54 +73,50 @@ const CAPTAIN_MAP:{[teamId:number]:number}={1:4, 2:8, 3:18};
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const PLAYER_PRICES:Record<number,number>={
-  // ── TIER A: All-Rounder Captains (100 pts) — pre-assigned, reference only ──
-  4:100,  // Ashish Nageet       Captain BI — Elite AR, leads from front
-  8:100,  // Kannan Santharam    Captain RK — Elite AR, experience + skill
-  18:100, // Sandeep Kirpane     Captain WW — Elite Batting AR, anchor bat
+  // ── TIER A: Captains (100 pts each) ──────────────────────────────────────
+  4:100,  // Ashish Nageet       Captain BI
+  8:100,  // Kannan Santharam    Captain RK
+  18:100, // Sandeep Kirpane     Captain WW
 
-  // ── TIER B: All-Rounders (70–90 pts) ─────────────────────────────────────
-  10:85,  // Krunal Shah         All-Rounder — Most complete player in pool
-  11:85,  // Ravinder Negi       All-Rounder — Experienced, reliable both ways
-  16:65,  // Rajat Mehrotra      All-Rounder — AR+WK rare triple threat
-  6:75,   // Janesh Chohan       All-Rounder — Strong bat, useful bowl
-  26:70,  // Vineet Shende       All-Rounder — Dependable, consistent
+  // ── TIER B: All-Rounders (65–85 pts) ─────────────────────────────────────
+  10:85,  // Krunal Shah
+  11:85,  // Ravinder Negi
+  6:75,   // Janesh Chohan
+  26:70,  // Vineet Shende
+  16:65,  // Rajat Mehrotra
 
-  // ── TIER C: Batting All-Rounders (70–80 pts) ─────────────────────────────
-  // (Sandeep id:18 is Batting AR — captain, above)
+  // ── TIER D: Bowling All-Rounders (60–70 pts) ─────────────────────────────
+  1:70,   // Abdul Mubeen
+  21:65,  // Santosh Vaghmare
+  3:60,   // Aravind
+  19:60,  // Sanjay Prajapati
+  31:40,  // Saravanan Marimuthu
 
-  // ── TIER D: Bowling All-Rounders (55–70 pts) ─────────────────────────────
-  1:70,   // Abdul Mubeen        Bowling AR  — Wickets + lower-order bat
-  21:65,  // Santosh Vaghmare    Bowling AR  — Reliable seam + bat handy
-  3:60,   // Aravind             Bowling AR  — Accurate & economical
-  19:60,  // Sanjay Prajapati    Bowling AR   — Bowler who can bat a bit
-  31:40,  // Saravanan Marimuthu Bowling AR   — Bowler who can bat a bit
+  // ── TIER F: Batsmen / WK (40–60 pts) ─────────────────────────────────────
+  2:60,   // Amit Jadli
+  9:60,   // Karthik Vempati
+  7:55,   // Jitendra Mistry
+  27:55,  // Srini Vellingiri
+  25:55,  // Vicky
+  15:50,  // Pranay Raj
+  30:50,  // Vibhor
+  17:45,  // Sameer Saxena
+  12:45,  // Nikhil Surabhi
+  22:45,  // Savan Paka
+  13:40,  // Nikhil Shah
+  23:30,  // Sushil Page
 
-  // ── TIER F: Batsmen / WK (45–55 pts) ─────────────────────────────────────
-  2:60,   // Amit Jadli          Bat/WK      — Opens + keeps, key role
-  25:55,  // Vicky               Bat/WK      — Good finisher + keeps
-  30:50,  // Vibhor              Bat/WK      — Solid keeper-bat
-  13:40,  // Nikhil Shah         Bat/WK      — Keeper-bat, useful asset
-  9:60,   // Karthik Vempati     Batsman     — Consistent top-order bat
-  15:50,  // Pranay Raj          Batsman     — Reliable bat (role updated)
+  // ── TIER G: Batsmen (25–45 pts) ───────────────────────────────────────────
+  28:25,  // Raghav Ambati
+  29:25,  // Karan Shah
 
-  // ── TIER G: Batsmen (35–50 pts) ──────────────────────────────────────────
-  28:25,  // Raghav Ambati       Batsman     — Attacking bat
-  17:45,  // Sameer Saxena       Batsman     — Steady mid-order
-  7:55,   // Jitendra Mistry     Batsman     — Sets up innings well
-  12:45,  // Nikhil Surabhi      Batsman     — Reliable bat
-  22:45,  // Savan Paka          Batsman     — Lower-order bat
-  23:30,  // Sushil Page         Batsman     — Lower-order bat
-  29:25,  // Karan Shah          Batsman     — Useful bat
-  27:55,  // Srini Vellingiri    Batsman     — Steady bat
-
-  // ── TIER H: Bowlers / Bowling specialists (30–40 pts) ────────────────────
-  14:40,  // Pradeep Patil       Bowling     — Key wicket-taker
-  5:40,   // Hari Reddy          Bowling     — Economical bowler
-  20:40,  // Sanket Rana         Bowler      — Tight lines
-  24:25,  // Tushar More         Bowler      — Useful change bowler
+  // ── TIER H: Bowlers (25–40 pts) ──────────────────────────────────────────
+  14:40,  // Pradeep Patil
+  5:40,   // Hari Reddy
+  20:40,  // Sanket Rana
+  24:25,  // Tushar More
 };
 
-// ── FINAL PLAYER LIST (31 players, all IDs unique, roles from updated list) ──
 const RAW_PLAYERS=[
   {id:1,  name:"Abdul Mubeen",        role:"Bowling All-Rounder",  img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
   {id:2,  name:"Amit Jadli",          role:"Batsman / WK",         img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
@@ -140,7 +136,7 @@ const RAW_PLAYERS=[
   {id:16, name:"Rajat Mehrotra",      role:"All-Rounder",          img:"RM",   chUrl:"https://cricheroes.com/player-profile/9755522/rajat-mehrotra/matches"},
   {id:17, name:"Sameer Saxena",       role:"Batsman",              img:"SS",   chUrl:"https://cricheroes.com/player-profile/9670658/sameer-saxena/matches"},
   {id:18, name:"Sandeep Kirpane",     role:"Batting All-Rounder",  img:"SK",   chUrl:"https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"},
-  {id:19, name:"Sanjay Prajapati",    role:"Bowling All-Rounder",   img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
+  {id:19, name:"Sanjay Prajapati",    role:"Bowling All-Rounder",  img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
   {id:20, name:"Sanket Rana",         role:"Bowler",               img:"SRa",  chUrl:"https://cricheroes.com/player-profile/29553267/sanket-rana/matches"},
   {id:21, name:"Santosh Vaghmare",    role:"Bowling All-Rounder",  img:"SV",   chUrl:"https://cricheroes.com/player-profile/15997501/santosh-waghmare/matches"},
   {id:22, name:"Savan Paka",          role:"Batsman",              img:"SPa",  chUrl:"https://cricheroes.com/player-profile/7984823/savan/matches"},
@@ -155,14 +151,13 @@ const RAW_PLAYERS=[
   {id:31, name:"Saravanan Marimuthu", role:"Batsman",              img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
 ];
 
-// Tier colour + badge based on role
 const roleTier=(r:string):string=>{
-  if(r==="All-Rounder")              return "Elite";
-  if(r==="Batting All-Rounder")      return "Elite";
+  if(r==="All-Rounder")               return "Elite";
+  if(r==="Batting All-Rounder")       return "Elite";
   if(r.includes("Bowling All-Round")) return "Premium";
-  if(r.includes("Bowler All-Round")) return "Premium";
-  if(r.includes("WK"))               return "Keeper";
-  if(r==="Batsman")                  return "Batsman";
+  if(r.includes("Bowler All-Round"))  return "Premium";
+  if(r.includes("WK"))                return "Keeper";
+  if(r==="Batsman")                   return "Batsman";
   return "Bowler";
 };
 
@@ -1563,7 +1558,6 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
           <div style={{fontFamily:"'Bebas Neue'",fontSize:32,letterSpacing:3,marginBottom:6,lineHeight:1.1}}>{curPlayer.name}</div>
           <div style={{display:"flex",justifyContent:"center",gap:7,marginBottom:8,flexWrap:"wrap"}}>
             <span className="ch">{curPlayer.role}</span>
-            <span className="ch">{curPlayer.tier}</span>
           </div>
           {(curPlayer.chUrl??"")&&(
             <a href={curPlayer.chUrl} target="_blank" rel="noopener noreferrer"
@@ -1691,9 +1685,8 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
           const sold=p.soldTo!==null?teams.find(t=>t.id===p.soldTo):undefined;
           return(<div key={p.id} className={`pc ${p.soldTo!==null?"sp":""}`}>
             <div className="pcav" style={{borderColor:tc(p.tier),background:`${tc(p.tier)}15`,color:tc(p.tier)}}>{p.img}</div>
-            <div className="pcn">{p.name}</div><div className="pcr">{p.role}</div>
-            <div className="pctb" style={{color:tc(p.tier)}}>{p.tier}</div>
-            {/* NO price — team name only */}
+            <div className="pcn">{p.name}</div>
+            <div className="pcr">{p.role}</div>
             {sold?<div className="pcs">✓ {sold.name}</div>:<div className="pcb">Available</div>}
             {(p.chUrl??"")&&<a href={p.chUrl} target="_blank" rel="noopener noreferrer" className="ch-link">🏏 CricHeroes ↗</a>}
           </div>);
