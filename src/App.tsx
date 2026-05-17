@@ -5,17 +5,19 @@ import { getDatabase, Database, ref, onValue, set, update, get } from "firebase/
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 interface FBConfig { apiKey:string; authDomain:string; databaseURL:string; projectId:string; storageBucket:string; messagingSenderId:string; appId:string; }
-const FB_STORE_KEY = "ps_fb_config_v4";
-const PREFILLED: Partial<FBConfig> = {
-  apiKey:"AIzaSyD3k2c_0oX3C3f1nAqDRYidKYNCGJgF7I4",
-  authDomain:"parstriker-auction.firebaseapp.com",
-  databaseURL:"https://parstriker-auction-default-rtdb.firebaseio.com",
-  projectId:"parstriker-auction",
-  storageBucket:"parstriker-auction.firebasestorage.app",
-  appId:"1:1400458016:web:b19f0b8d854f5a9df02545",
+// ── Firebase fully pre-configured — no setup prompt shown to users ──────────
+const FULL_FB_CONFIG:FBConfig = {
+  apiKey:             "AIzaSyD3k2c_0oX3C3f1nAqDRYidKYNCGJgF7I4",
+  authDomain:         "parstriker-auction.firebaseapp.com",
+  databaseURL:        "https://parstriker-auction-default-rtdb.firebaseio.com",
+  projectId:          "parstriker-auction",
+  storageBucket:      "parstriker-auction.firebasestorage.app",
+  messagingSenderId:  "1400458016",
+  appId:              "1:1400458016:web:b19f0b8d854f5a9df02545",
 };
-const loadCfg=():FBConfig|null=>{try{const r=localStorage.getItem(FB_STORE_KEY);return r?{...PREFILLED,...JSON.parse(r)} as FBConfig:null;}catch{return null;}};
-const saveCfg=(c:FBConfig)=>{try{localStorage.setItem(FB_STORE_KEY,JSON.stringify(c));}catch{}};
+const FB_STORE_KEY = "ps_fb_config_v5";
+const loadCfg=():FBConfig=>FULL_FB_CONFIG;
+const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
@@ -35,7 +37,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=500; const MIN_BID=5; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const ADMIN_PASS="admin123"; const DATA_VERSION=10;
+const TOTAL_ROUNDS=3; const ADMIN_PASS="Parstriker#0"; const DATA_VERSION=10;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -173,9 +175,9 @@ const buildInitPlayers=():Player[]=>{
 const buildInitTeams=():Team[]=>{
   const captainPrices:{[id:number]:number}={4:100,8:100,18:100}; // Tier A — 100 pts each
   const teamsBase=[
-    {id:1,name:"Blue Indians",short:"BI",color:"#1a56db",accent:"#FFD700",captainPass:"ashish123",captainPlayerId:4},
-    {id:2,name:"Red Knights",short:"RK",color:"#c41e3a",accent:"#FFD700",captainPass:"kannan123",captainPlayerId:8},
-    {id:3,name:"White Wolves",short:"WW",color:"#b0b8c8",accent:"#FFD700",captainPass:"sandeep123",captainPlayerId:18},
+    {id:1,name:"Blue Indians",short:"BI",color:"#1a56db",accent:"#FFD700",captainPass:"BlueIndians#0",captainPlayerId:4},
+    {id:2,name:"Red Knights",short:"RK",color:"#c41e3a",accent:"#FFD700",captainPass:"RedKnights#0",captainPlayerId:8},
+    {id:3,name:"White Wolves",short:"WW",color:"#b0b8c8",accent:"#FFD700",captainPass:"WhiteWolves#0",captainPlayerId:18},
   ];
   return teamsBase.map(t=>{
     const capPlayer=RAW_PLAYERS.find(p=>p.id===t.captainPlayerId)!;
@@ -747,7 +749,7 @@ html{font-size:16px}
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [fbReady,setFbReady]=useState<boolean>(()=>loadCfg()!==null);
+  const [fbReady,setFbReady]=useState<boolean>(()=>{try{initFB(FULL_FB_CONFIG);return true;}catch{return false;}});
   const [role,setRole]=useState<Role>("login");
   const [teamId,setTeamId]=useState<number|null>(null);
   const [st,setSt]=useState<AuctionState>(INIT_STATE);
@@ -926,7 +928,7 @@ export default function App() {
     return safeArr(st.skippedTeams).includes(teamId);
   },[st]);
 
-  if(!fbReady)return(<><style>{CSS}</style><FirebaseSetup onSave={cfg=>{saveCfg(cfg);initFB(cfg);setFbReady(true);setLoading(true);}}/></>);
+  // Firebase always ready — no setup screen needed
   if(loading)return(<><style>{CSS}</style><div className="conn"><div className="spin"/><div style={{color:"var(--cyan)",fontSize:13,letterSpacing:1}}>Connecting to Parstriker…</div></div></>);
 
   return(<>
