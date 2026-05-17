@@ -22,22 +22,55 @@ let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
 const fbRef=()=>ref(getDb(),"psAuction_v10");
+const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
 const patchSt=async(p:Partial<AuctionState>)=>update(fbRef(),p);
+
+// ── SHA-256 hash via browser SubtleCrypto — passwords never stored plain ──
+const sha256=async(text:string):Promise<string>=>{
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+};
+
+// ── Write hashed passwords to Firebase (admin calls this once on first run) ─
+// Stored at /psAuth_v1 — separate from auction data, never in JS bundle
+const initAuth=async()=>{
+  const snap=await get(authRef());
+  if(snap.exists())return; // already set — don't overwrite
+  // These are the ONLY place passwords appear — hashed immediately, never stored plain
+  const [ah,bh,rkh,wwh]=await Promise.all([
+    sha256("Parstriker#0"),
+    sha256("BlueIndians#0"),
+    sha256("RedKnights#0"),
+    sha256("WhiteWolves#0"),
+  ]);
+  await set(authRef(),{admin:ah, bi:bh, rk:rkh, ww:wwh});
+};
+
+// ── Verify a password attempt against stored hash ──────────────────────────
+const verifyPass=async(attempt:string,role:"admin"|"bi"|"rk"|"ww"):Promise<boolean>=>{
+  try{
+    const snap=await get(authRef());
+    if(!snap.exists())return false;
+    const hashes=snap.val() as Record<string,string>;
+    const attemptHash=await sha256(attempt);
+    return hashes[role]===attemptHash;
+  }catch{return false;}
+};
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type Role="login"|"admin"|"captain"|"viewer";
 type Phase="banner"|"running"|"done";
 interface Player{id:number;name:string;role:string;tier:string;country:string;img:string;basePrice:number;soldTo:number|null;soldPrice:number|null;round:number|null;isCaptain?:boolean;chUrl?:string;}
 interface SquadPlayer extends Player{soldPrice:number;isMarquee:boolean;round:number;isCaptain?:boolean;}
-interface Team{id:number;name:string;short:string;color:string;accent:string;captainPass:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
+interface Team{id:number;name:string;short:string;color:string;accent:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
 interface LogItem{icon:string;text:string;time:string;}
 interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];}
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=500; const MIN_BID=5; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const ADMIN_PASS="Parstriker#0"; const DATA_VERSION=10;
+const TOTAL_ROUNDS=3; const DATA_VERSION=10;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -175,9 +208,9 @@ const buildInitPlayers=():Player[]=>{
 const buildInitTeams=():Team[]=>{
   const captainPrices:{[id:number]:number}={4:100,8:100,18:100}; // Tier A — 100 pts each
   const teamsBase=[
-    {id:1,name:"Blue Indians",short:"BI",color:"#1a56db",accent:"#FFD700",captainPass:"BlueIndians#0",captainPlayerId:4},
-    {id:2,name:"Red Knights",short:"RK",color:"#c41e3a",accent:"#FFD700",captainPass:"RedKnights#0",captainPlayerId:8},
-    {id:3,name:"White Wolves",short:"WW",color:"#b0b8c8",accent:"#FFD700",captainPass:"WhiteWolves#0",captainPlayerId:18},
+    {id:1,name:"Blue Indians",short:"BI",color:"#1a56db",accent:"#FFD700",captainPlayerId:4},
+    {id:2,name:"Red Knights",short:"RK",color:"#c41e3a",accent:"#FFD700",captainPlayerId:8},
+    {id:3,name:"White Wolves",short:"WW",color:"#b0b8c8",accent:"#FFD700",captainPlayerId:18},
   ];
   return teamsBase.map(t=>{
     const capPlayer=RAW_PLAYERS.find(p=>p.id===t.captainPlayerId)!;
@@ -765,6 +798,7 @@ export default function App() {
 
   useEffect(()=>{
     if(!fbReady){setLoading(false);return;}
+    initAuth().catch(()=>{}); // write hashed passwords to Firebase on first run
     let unsub:(()=>void)|null=null;
     try{
       unsub=onValue(fbRef(),snap=>{
@@ -1038,7 +1072,29 @@ function FirebaseSetup({onSave}:{onSave:(c:FBConfig)=>void}){
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function LoginScreen({teams,onLogin}:{teams:Team[];onLogin:(r:Role,tid?:number)=>void}){
   const [sel,setSel]=useState<Role|null>(null);const [pass,setPass]=useState("");const [err,setErr]=useState("");
-  const tryLogin=()=>{setErr("");if(!sel)return;if(sel==="viewer"){onLogin("viewer");return;}if(sel==="admin"){pass===ADMIN_PASS?onLogin("admin"):setErr("Wrong admin password");return;}const team=teams.find(t=>t.captainPass===pass);team?onLogin("captain",team.id):setErr("Wrong captain password");};
+  const [checking,setChecking]=useState(false);
+  const tryLogin=async()=>{
+    setErr("");
+    if(!sel)return;
+    if(sel==="viewer"){onLogin("viewer");return;}
+    setChecking(true);
+    try{
+      if(sel==="admin"){
+        const ok=await verifyPass(pass,"admin");
+        ok?onLogin("admin"):setErr("Wrong admin password");
+      } else {
+        // Try each captain role
+        const roles:["bi"|"rk"|"ww",number][]=[["bi",1],["rk",2],["ww",3]];
+        let matched=false;
+        for(const [role,teamId] of roles){
+          const ok=await verifyPass(pass,role);
+          if(ok){onLogin("captain",teamId);matched=true;break;}
+        }
+        if(!matched)setErr("Wrong captain password");
+      }
+    }catch{setErr("Connection error — try again");}
+    setChecking(false);
+  };
   return(
     <div className="lw">
       <div className="lhero">
@@ -1079,7 +1135,7 @@ function LoginScreen({teams,onLogin}:{teams:Team[];onLogin:(r:Role,tid?:number)=
         {err&&<div className="em">⚠ {err}</div>}
         {sel&&sel!=="viewer"&&<input className="inp" type="password" placeholder={sel==="admin"?"Admin password":"Captain password"} value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin()}/>}
         {sel==="viewer"&&<div style={{fontSize:11,color:"var(--mut)",marginBottom:10,textAlign:"center"}}>No password required</div>}
-        <button className="gb" disabled={!sel} onClick={tryLogin}>ENTER</button>
+        <button className="gb" disabled={!sel||checking} onClick={tryLogin}>{checking?"Checking…":"ENTER"}</button>
         <div className="ht">Contact the auction organiser for your password</div>
       </div>
       <Footer/>
