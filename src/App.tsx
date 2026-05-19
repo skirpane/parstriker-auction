@@ -66,7 +66,7 @@ interface Player{id:number;name:string;role:string;tier:string;country:string;im
 interface SquadPlayer extends Player{soldPrice:number;isMarquee:boolean;round:number;isCaptain?:boolean;}
 interface Team{id:number;name:string;short:string;color:string;accent:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
 interface LogItem{icon:string;text:string;time:string;}
-interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];}
+interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];rotatingPool?:number[];}
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=500; const MIN_BID=5; const MAX_SQUAD=8; const MAX_MARQUEE=7;
@@ -126,6 +126,7 @@ const PLAYER_PRICES:Record<number,number>={
   3:60,   // Aravind
   19:60,  // Sanjay Prajapati
   31:40,  // Saravanan Marimuthu
+  32:55,  // Saravanan Marimuthu
 
   // ── TIER F: Batsmen / WK (40–60 pts) ─────────────────────────────────────
   2:60,   // Amit Jadli
@@ -161,7 +162,7 @@ const RAW_PLAYERS=[
   {id:6,  name:"Janesh Chohan",       role:"All-Rounder",          img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
   {id:7,  name:"Jitendra Mistry",     role:"Batsman",              img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
   {id:8,  name:"Kannan Santharam",    role:"Bowler",               img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
-  {id:9,  name:"Karthik Vempati",     role:"Batsman",              img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
+  {id:9,  name:"Karthik Vempati",     role:"All-Rounder",          img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
   {id:10, name:"Krunal Shah",         role:"All-Rounder",          img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
   {id:11, name:"Ravinder Negi",       role:"All-Rounder",          img:"RN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
   {id:12, name:"Nikhil Surabhi",      role:"Batsman",              img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
@@ -184,6 +185,7 @@ const RAW_PLAYERS=[
   {id:29, name:"Karan Shah",          role:"Batsman",              img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
   {id:30, name:"Vibhor",              role:"Batsman / WK",         img:"VB",   chUrl:"https://cricheroes.com/player-profile/33203217/vibhor-k-(wk)/matches"},
   {id:31, name:"Saravanan Marimuthu", role:"Batsman",              img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
+  {id:32, name:"Kayur",               role:"Bowling All-Rounders", img:"KAy",  chUrl:"https://cricheroes.com/player-profile/42050777/kayur-cric/matches"},
 ];
 
 const roleTier=(r:string):string=>{
@@ -230,7 +232,7 @@ const INIT_TEAMS=buildInitTeams();
 const INIT_STATE:AuctionState={
   queue:[],curIdx:0,curBid:0,curBidder:null,
   aRound:0,phase:"banner",showSold:false,aDone:false,
-  log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,skippedTeams:[],
+  log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,skippedTeams:[],rotatingPool:[],
 };
 
 // ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
@@ -810,7 +812,7 @@ export default function App() {
             } else {
               const safe:AuctionState={
                 ...INIT_STATE,...raw,
-                queue:safeArr(raw.queue),log:safeArr(raw.log),skippedTeams:safeArr(raw.skippedTeams),
+                queue:safeArr(raw.queue),log:safeArr(raw.log),skippedTeams:safeArr(raw.skippedTeams),rotatingPool:safeArr(raw.rotatingPool),
                 teams:safeArr(raw.teams).map(t=>({...t,squad:safeArr(t.squad)})),
                 players:safeArr(raw.players),
                 lastSold:raw.lastSold??null,
@@ -860,10 +862,19 @@ export default function App() {
     if(!cp||snap.phase!=="running")return;
     const team=safeArr(snap.teams).find(t=>t.id===tid);
     if(!team)return;
-    const nb=snap.curBidder!==null?snap.curBid+MIN_BID:cp.basePrice;
+    // ── PRICE RULE ────────────────────────────────────────────────────────
+    // Price only increases when a NEW team outbids the current leader.
+    // If no one has bid yet           → set to base price (no increase)
+    // If this team is outbidding another → raise by MIN_BID
+    // Same team bidding again is blocked by canBid() already
+    const nb = snap.curBidder === null
+      ? cp.basePrice                    // first bid ever → base price, no increase
+      : snap.curBidder === tid
+        ? snap.curBid                   // same leader (shouldn't happen) → no change
+        : snap.curBid + MIN_BID;        // different team outbidding → raise by 5
     if(team.purse<nb)return;
     // When a team bids, remove them from skipped list (they're back in)
-    const skipped=(safeArr(snap.skippedTeams)).filter(id=>id!==tid);
+    const skipped=safeArr(snap.skippedTeams).filter(id=>id!==tid);
     const log=addLog(snap,"💰",`${team.short} bid ${fmt(nb)} for ${cp.name}`);
     await patch({curBid:nb,curBidder:tid,log,skippedTeams:skipped} as Partial<AuctionState>);
   };
@@ -879,7 +890,7 @@ export default function App() {
     const activeBidders=safeArr(snap.teams).filter(t=>
       safeArr(t.squad).length<MAX_SQUAD &&
       t.marqueeCount<MAX_MARQUEE &&
-      t.purse>=(snap.curBidder!==null?snap.curBid+MIN_BID:cp.basePrice) &&
+      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?snap.curBid:snap.curBid+MIN_BID) &&
       !skipped.includes(t.id)
     );
     const log=addLog(snap,"⏭️",`${team.short} passed on ${cp.name}`);
@@ -926,14 +937,51 @@ export default function App() {
 
   const advance=async()=>{
     const snap=await readSt();
+
+    // ── Check if all squads are already full ──────────────────────────────
+    const allFull=safeArr(snap.teams).every(t=>safeArr(t.squad).length>=MAX_SQUAD);
+    if(allFull){
+      // Collect every unsold player (including remaining queue) into rotating pool
+      const captainIds=Object.values(CAPTAIN_MAP);
+      const alreadyInPool=safeArr(snap.rotatingPool);
+      const remainingQueue=safeArr(snap.queue).slice(snap.curIdx+1); // not yet seen
+      const allUnsold=safeArr(snap.players)
+        .filter(p=>p.soldTo===null&&!captainIds.includes(p.id))
+        .map(p=>p.id);
+      const rotating=[...new Set([...alreadyInPool,...allUnsold,...remainingQueue])];
+      const log=addLog(snap,"🏆","All squads full! Remaining players form the Rotating Pool.");
+      await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
+      return;
+    }
+
     const next=snap.curIdx+1;
     if(next>=safeArr(snap.queue).length){
+      // End of current round — collect unsold into rotating pool so far
+      const captainIds=Object.values(CAPTAIN_MAP);
+      const unsoldSoFar=safeArr(snap.players)
+        .filter(p=>p.soldTo===null&&!captainIds.includes(p.id))
+        .map(p=>p.id);
+      const rotating=[...new Set([...safeArr(snap.rotatingPool),...unsoldSoFar])];
+
       if(snap.aRound>=TOTAL_ROUNDS){
-        const log=addLog(snap,"🏆","All rounds done! Parstriker Auction complete!");
-        await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null});
+        const log=addLog(snap,"🏆",`Auction complete! ${rotating.length} players in Rotating Pool.`);
+        await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
       } else {
-        const log=addLog(snap,"🔔",`Round ${snap.aRound} complete! Unsold players re-enter.`);
-        await write({...snap,showSold:false,phase:"banner",log,lastSold:null});
+        // Check if any unsold players can still be bid on next round
+        const biddable=unsoldSoFar.filter(pid=>{
+          return safeArr(snap.teams).some(t=>
+            safeArr(t.squad).length<MAX_SQUAD &&
+            t.marqueeCount<MAX_MARQUEE
+          );
+        });
+        if(biddable.length===0||allFull){
+          // No point running more rounds — go to done
+          const log=addLog(snap,"🏆","All squads full! Auction complete.");
+          await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
+        } else {
+          const log=addLog(snap,"🔔",`Round ${snap.aRound} complete! ${biddable.length} unsold players re-enter.`);
+          await write({...snap,showSold:false,phase:"banner",log,lastSold:null,rotatingPool:rotating});
+        }
       }
     } else {
       const np=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[next]);
@@ -952,9 +1000,14 @@ export default function App() {
     if(st.showSold||!curPlayer||st.phase!=="running")return false;
     if(safeArr(team.squad).length>=MAX_SQUAD)return false;
     if(team.marqueeCount>=MAX_MARQUEE)return false;
-    const nb=st.curBidder!==null?st.curBid+MIN_BID:curPlayer.basePrice;
+    // Same price rule as placeBid: only raises when a different team outbids
+    const nb=st.curBidder===null
+      ? curPlayer.basePrice             // first bid → base price
+      : st.curBidder===team.id
+        ? st.curBid                     // already leading → no raise needed
+        : st.curBid+MIN_BID;            // outbidding → raise by 5
     if(team.purse<nb)return false;
-    if(team.id===st.curBidder)return false;
+    if(team.id===st.curBidder)return false; // can't outbid yourself
     return true;
   },[st,curPlayer]);
 
@@ -1171,7 +1224,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
     </div>
 
     {tab==="auction"&&(
-      st.aDone?<DoneScreen teams={teams}/>:
+      st.aDone?<DoneScreen teams={teams} players={players} rotatingPool={safeArr(st.rotatingPool)}/>:
       st.phase==="banner"?(
         <div>
           <div className="rbn">
@@ -1232,7 +1285,12 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 {teams.map(team=>{
                   const able=canBid(team),isLead=team.id===st.curBidder;
                   const skipped=hasSkipped(team.id);
-                  const nb=st.curBidder!==null?st.curBid+MIN_BID:curPlayer.basePrice;
+                  // nb = price this team would pay if they bid now
+                  const nb=st.curBidder===null
+                    ? curPlayer.basePrice       // first bid → base
+                    : isLead
+                      ? st.curBid              // already leading → same price
+                      : st.curBid+MIN_BID;     // outbidding → +5
                   return(
                     <div key={team.id} style={{display:"flex",flexDirection:"column",gap:4}}>
                       <button className="tbb" disabled={!able}
@@ -1370,7 +1428,12 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
 }){
   const isLeading=st.curBidder===myTeam.id;
   const pctLeft=(myTeam.purse/PURSE)*100;
-  const nextBid=st.curBidder!==null?st.curBid+MIN_BID:curPlayer?.basePrice??0;
+  // nextBid: only raises when THIS team is outbidding someone else
+  const nextBid=st.curBidder===null
+    ? curPlayer?.basePrice??0           // first bid → base price
+    : st.curBidder===myTeam.id
+      ? st.curBid                       // already leading — no further raise
+      : st.curBid+MIN_BID;              // outbidding → +5
   const squad=safeArr(myTeam.squad);
   const allTeams=safeArr(st.teams);
   const leadTeam=st.curBidder!==null?allTeams.find(t=>t.id===st.curBidder):undefined;
@@ -1784,11 +1847,106 @@ function AdminTeamCards({teams}:{teams:Team[]}){
 }
 
 // ─── DONE ─────────────────────────────────────────────────────────────────────
-function DoneScreen({teams}:{teams:Team[]}){return(
-  <div><div className="done"><div className="dtr">🏆</div><div className="dtl">PARSTRIKER AUCTION COMPLETE</div>
-    <p style={{color:"var(--mut)",marginBottom:32}}>All {TOTAL_ROUNDS} rounds done · Final squads locked!</p>
-  </div><div className="tgrid"><AdminTeamCards teams={teams}/></div><Footer/></div>
-);}
+function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];rotatingPool:number[]}){
+  const captainIds=Object.values(CAPTAIN_MAP);
+  const poolPlayers=rotatingPool
+    .map(id=>players.find(p=>p.id===id))
+    .filter((p):p is Player=>!!p&&!captainIds.includes(p.id));
+
+  return(
+    <div>
+      {/* ── AUCTION COMPLETE HERO ── */}
+      <div className="done">
+        <div className="dtr">🏆</div>
+        <div className="dtl">PARSTRIKER AUCTION COMPLETE</div>
+        <p style={{color:"var(--mut)",marginBottom:32}}>
+          All squads locked · {poolPlayers.length} player{poolPlayers.length!==1?"s":""} in Rotating Pool
+        </p>
+      </div>
+
+      {/* ── FINAL SQUADS ── */}
+      <div className="tgrid"><AdminTeamCards teams={teams}/></div>
+
+      {/* ── ROTATING PLAYER POOL ── */}
+      {poolPlayers.length>0&&(
+        <div style={{padding:"16px",maxWidth:960,margin:"0 auto"}}>
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,
+            padding:"16px 20px",
+            background:"linear-gradient(135deg,rgba(124,58,237,.12),rgba(56,189,248,.08))",
+            border:"1px solid rgba(124,58,237,.3)",borderRadius:16}}>
+            <div style={{fontSize:32}}>🔄</div>
+            <div>
+              <div style={{fontFamily:"'Bebas Neue'",fontSize:22,letterSpacing:3,
+                background:"linear-gradient(90deg,#a78bfa,#38bdf8)",
+                WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>
+                ROTATING PLAYER POOL
+              </div>
+              <div style={{fontSize:12,color:"var(--mut)",marginTop:2,lineHeight:1.5}}>
+                These {poolPlayers.length} players are available as substitutes on match day · 
+                Any captain can request them based on availability
+              </div>
+            </div>
+          </div>
+
+          {/* Pool player cards */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:8}}>
+            {poolPlayers.map(p=>(
+              <div key={p.id} style={{
+                background:"linear-gradient(145deg,rgba(34,30,50,.8),rgba(26,22,42,.9))",
+                border:"1px solid rgba(124,58,237,.2)",borderRadius:11,padding:12,
+                position:"relative",textAlign:"center"}}>
+                {/* Rotating badge */}
+                <div style={{position:"absolute",top:7,right:7,fontSize:9,
+                  background:"rgba(56,189,248,.15)",border:"1px solid rgba(56,189,248,.3)",
+                  color:"#38bdf8",borderRadius:6,padding:"1px 5px",fontWeight:700,letterSpacing:.5}}>
+                  POOL
+                </div>
+                {/* Avatar */}
+                <div style={{width:42,height:42,borderRadius:"50%",margin:"0 auto 8px",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontFamily:"'Bebas Neue'",fontSize:11,
+                  border:`2px solid ${tc(p.tier)}`,
+                  background:`${tc(p.tier)}15`,color:tc(p.tier)}}>
+                  {p.img}
+                </div>
+                <div style={{fontFamily:"'Rajdhani'",fontWeight:700,fontSize:12,
+                  color:"#ffffff",marginBottom:3,lineHeight:1.2}}>{p.name}</div>
+                <div style={{fontSize:9,color:"var(--mut)",marginBottom:6,lineHeight:1.3}}>{p.role}</div>
+                {p.chUrl&&(
+                  <a href={p.chUrl} target="_blank" rel="noopener noreferrer"
+                    style={{display:"block",fontSize:9,color:"var(--cyan)",textDecoration:"none",
+                      background:"rgba(56,189,248,.08)",border:"1px solid rgba(56,189,248,.2)",
+                      borderRadius:6,padding:"3px 0"}}>
+                    🏏 CricHeroes
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Match day note */}
+          <div style={{marginTop:16,padding:"12px 16px",
+            background:"rgba(245,158,11,.06)",border:"1px solid rgba(245,158,11,.2)",
+            borderRadius:12,display:"flex",gap:10,alignItems:"flex-start"}}>
+            <div style={{fontSize:20,flexShrink:0}}>📋</div>
+            <div>
+              <div style={{fontFamily:"'Rajdhani'",fontWeight:700,fontSize:13,
+                color:"var(--gold)",marginBottom:4,letterSpacing:.5}}>MATCH DAY RULES</div>
+              <div style={{fontSize:11,color:"var(--mut)",lineHeight:1.8}}>
+                • If a team player is unavailable, the captain can request a rotating pool player<br/>
+                • Rotating players play for whichever team needs them that day<br/>
+                • Priority given to teams with fewer available players<br/>
+                • Admin confirms the substitute before the match begins
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <Footer/>
+    </div>
+  );
+}
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
 function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved</div></div>);}
