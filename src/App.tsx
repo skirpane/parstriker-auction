@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v19");
+const fbRef=()=>ref(getDb(),"psAuction_v20");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=19;
+const TOTAL_ROUNDS=3; const DATA_VERSION=20;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -835,15 +835,17 @@ export default function App() {
     const team=safeArr(snap.teams).find(t=>t.id===tid);
     if(!team)return;
     // ── PRICE RULE ────────────────────────────────────────────────────────
-    // Price only increases when a NEW team outbids the current leader.
-    // If no one has bid yet           → set to base price (no increase)
-    // If this team is outbidding another → raise by MIN_BID
-    // Same team bidding again is blocked by canBid() already
+    // safeCurBid: floor curBid at basePrice to prevent race-condition where
+    // Firebase still has curBid=0 when a second team reads and bids.
+    // Without this: 0 + 10 = 10 (wrong). With this: max(0,100) + 10 = 110 ✓
+    const safeCurBid = snap.curBidder !== null
+      ? Math.max(snap.curBid, cp.basePrice)   // someone bid → floor at basePrice
+      : 0;                                     // nobody bid yet → 0 (first bid uses basePrice below)
     const nb = snap.curBidder === null
-      ? cp.basePrice                    // first bid ever → base price, no increase
+      ? cp.basePrice                    // first bid → base price exactly (100)
       : snap.curBidder === tid
-        ? snap.curBid                   // same leader (shouldn't happen) → no change
-        : snap.curBid + MIN_BID;        // different team outbidding → raise by 5
+        ? safeCurBid                    // same leader → no change
+        : safeCurBid + MIN_BID;         // outbidding → +10 on top of safe value
     if(team.purse<nb)return;
     // When a team bids, remove them from skipped list (they're back in)
     const skipped=safeArr(snap.skippedTeams).filter(id=>id!==tid);
@@ -862,7 +864,7 @@ export default function App() {
     const activeBidders=safeArr(snap.teams).filter(t=>
       safeArr(t.squad).length<MAX_SQUAD &&
       t.marqueeCount<MAX_MARQUEE &&
-      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?snap.curBid:snap.curBid+MIN_BID) &&
+      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?Math.max(snap.curBid,cp.basePrice):Math.max(snap.curBid,cp.basePrice)+MIN_BID) &&
       !skipped.includes(t.id)
     );
     const log=addLog(snap,"⏭️",`${team.short} passed on ${cp.name}`);
