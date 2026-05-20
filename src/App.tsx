@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v18");
+const fbRef=()=>ref(getDb(),"psAuction_v19");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=18;
+const TOTAL_ROUNDS=3; const DATA_VERSION=19;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -1536,7 +1536,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
             <button className="cbb"
               style={{background:isLeading?"linear-gradient(135deg,var(--ok),#00cc66)":"linear-gradient(135deg,#7c3aed,#4f46e5)"}}
               disabled={!canBid} onClick={()=>onBid(myTeam.id)}>
-              {isLeading?`✓ LEADING ${fmt(st.curBid)}`:canBid?`🔨 BID ${fmt(nextBid)}`:"CANNOT BID"}
+              {isLeading?`✓ LEADING ${fmt(curBidSafe)}`:canBid?`🔨 BID ${fmt(nextBid)}`:"CANNOT BID"}
             </button>
 
             {/* PASS button — skip this player, re-enter if someone else bids */}
