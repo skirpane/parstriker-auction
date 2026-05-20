@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v17");
+const fbRef=()=>ref(getDb(),"psAuction_v18");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=17;
+const TOTAL_ROUNDS=3; const DATA_VERSION=18;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -122,16 +122,15 @@ const CAPTAIN_MAP:{[teamId:number]:number}={1:4, 2:8, 3:18};
 //  Win 4 bidding wars (+100 each)       → spend exactly 1100 pts (budget exhausted!)
 // ══════════════════════════════════════════════════════════════════════════════
 const PLAYER_PRICES:Record<number,number>={
-  // All 33 players — flat 100 pts base each
+  // All 28 players — flat 100 pts base each
   // Captains (4, 8, 18) pre-assigned — 100 pts reference only
   1:100,2:100,3:100,4:100,5:100,6:100,7:100,8:100,9:100,10:100,
   11:100,12:100,13:100,14:100,15:100,16:100,17:100,18:100,19:100,20:100,
   21:100,22:100,23:100,24:100,25:100,26:100,27:100,28:100,
 };
 
-
 const RAW_PLAYERS=[
-  {id:1, name:"Pranay Raj",          role:"Batsman",              img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},  
+  {id:1,  name:"Pranay Raj",          role:"Batsman",              img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
   {id:2,  name:"Amit Jadli",          role:"Batsman / WK",         img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
   {id:3,  name:"Aravind",             role:"Bowling All-Rounder",  img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
   {id:4,  name:"Ashish Nageet",       role:"All-Rounder",          img:"AN",   chUrl:"https://cricheroes.com/player-profile/9793757/ashish-nageet/matches"},
@@ -973,12 +972,13 @@ export default function App() {
     if(st.showSold||!curPlayer||st.phase!=="running")return false;
     if(safeArr(team.squad).length>=MAX_SQUAD)return false;
     if(team.marqueeCount>=MAX_MARQUEE)return false;
-    // Price rule: first bid = base price; outbidding someone = +10
+    // Price rule: first bid = base; outbidding = +10; safe floor prevents 0+10 bug
+    const safeCur=Math.max(st.curBid, st.curBidder!==null?curPlayer.basePrice:0);
     const nb=st.curBidder===null
-      ? curPlayer.basePrice             // no one has bid → base price
+      ? curPlayer.basePrice             // no one has bid → base price (100)
       : st.curBidder===team.id
-        ? st.curBid                     // already leading → no further cost
-        : st.curBid+MIN_BID;            // outbidding another team → +10
+        ? safeCur                       // already leading → same
+        : safeCur+MIN_BID;              // outbidding → +10
     if(team.purse<nb)return false;
     if(team.id===st.curBidder)return false; // already leading, no need to rebid
     return true;
@@ -1250,7 +1250,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                     </div>
                 <div className="bb">
                   <div className="bl">{st.curBidder!==null?"🔥 Current Bid":"🎯 Opening Price — First Bid = Base"}</div>
-                  <div className="ba">{fmt(st.curBidder!==null?st.curBid:curPlayer?.basePrice??0)}</div>
+                  <div className="ba">{fmt(st.curBidder!==null?Math.max(st.curBid,curPlayer?.basePrice??100):curPlayer?.basePrice??100)}</div>
                   <div className="bs">+{fmt(MIN_BID)} per raise · min bid: {fmt(curPlayer.basePrice)}</div>
                   {leadTeam&&<div className="bldr" style={{color:leadTeam.color}}>🔥 {leadTeam.name} leading</div>}
                 </div>
@@ -1259,13 +1259,14 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 {teams.map(team=>{
                   const able=canBid(team),isLead=team.id===st.curBidder;
                   const skipped=hasSkipped(team.id);
-                  // nb = price this team would pay if they bid now
-                  // Rule: first bid = base price | outbidding = +10 | leading = no change
+                  // nb = price this team pays if they bid now
+                  // Safe floor: max(curBid, basePrice) prevents 0+10=10 bug
+                  const safeCurBid=Math.max(st.curBid, st.curBidder!==null?curPlayer.basePrice:0);
                   const nb=st.curBidder===null
                     ? curPlayer.basePrice        // nobody bid yet → base price (100)
                     : isLead
-                      ? st.curBid               // already leading → same price shown
-                      : st.curBid+MIN_BID;      // different team outbidding → +10
+                      ? safeCurBid              // already leading → same price
+                      : safeCurBid+MIN_BID;     // outbidding → +10 on real value
                   return(
                     <div key={team.id} style={{display:"flex",flexDirection:"column",gap:4}}>
                       <button className="tbb" disabled={!able}
@@ -1405,14 +1406,14 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
   const isLeading=st.curBidder===myTeam.id;
   const pctLeft=(myTeam.purse/PURSE)*100;
   // nextBid: price this captain would pay if they bid now
-  // Rule: first bid on player = base price (no raise)
-  //       outbidding a different team = +10 pts
-  //       already leading = stays at current (can't rebid yourself)
+  // Uses max(curBid, basePrice) as floor to prevent 0+10=10 display bug
+  const base = curPlayer?.basePrice??100;
+  const curBidSafe = Math.max(st.curBid, st.curBidder!==null ? base : 0);
   const nextBid=st.curBidder===null
-    ? curPlayer?.basePrice??0           // nobody bid yet → base price (100)
+    ? base                              // nobody bid yet → base price (100)
     : st.curBidder===myTeam.id
-      ? st.curBid                       // already leading → no raise needed
-      : st.curBid+MIN_BID;              // outbidding another team → +10
+      ? curBidSafe                      // already leading → show current
+      : curBidSafe+MIN_BID;             // outbidding → +10 on top of real curBid
   const squad=safeArr(myTeam.squad);
   const allTeams=safeArr(st.teams);
   const leadTeam=st.curBidder!==null?allTeams.find(t=>t.id===st.curBidder):undefined;
@@ -1518,7 +1519,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                   :st.curBidder!==null?"⚡ OUTBID PRICE (someone leading)"
                   :"🎯 OPENING PRICE — You pay exactly this"}
               </div>
-              <div className={`cbd-amount ${isLeading?"leading-amount":""}`}>{fmt(st.curBidder!==null?st.curBid:curPlayer?.basePrice??0)}</div>
+              <div className={`cbd-amount ${isLeading?"leading-amount":""}`}>{fmt(st.curBidder!==null?Math.max(st.curBid,curPlayer?.basePrice??100):curPlayer?.basePrice??100)}</div>
               {!isLeading&&st.curBidder!==null&&leadTeam&&(
                 <div className="cbd-leader" style={{background:`${leadTeam.color}22`,color:leadTeam.color}}>
                   ⚠ {leadTeam.name} is leading!
