@@ -1540,7 +1540,19 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
 
             {/* BID BUTTON */}
             <div
-              onClick={()=>{ if(canBidNow && !isLeading) onBid(myTeam.id); }}
+              onClick={()=>{
+                if(!canBidNow||isLeading)return;
+                // Direct Firebase update — bypass all callbacks
+                const cp2=safeArr(st.players).find((p:Player)=>p.id===safeArr(st.queue)[st.curIdx]);
+                if(!cp2||st.phase!=="running")return;
+                const safeCur2=st.curBidder!==null?Math.max(st.curBid,cp2.basePrice):0;
+                const nb2=st.curBidder===null?cp2.basePrice:safeCur2+MIN_BID;
+                const skipped2=safeArr(st.skippedTeams).filter((id:number)=>id!==myTeam.id);
+                const fb2=st.firstBidder!==null?st.firstBidder:myTeam.id;
+                const time2=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+                const log2=[{icon:"💰",text:`${myTeam.short} bid ${fmt(nb2)} for ${cp2.name}`,time:time2},...safeArr(st.log).slice(0,59)];
+                update(ref(getDb(),"psAuction_v22"),{curBid:nb2,curBidder:myTeam.id,firstBidder:fb2,log:log2,skippedTeams:skipped2}).catch(e=>alert("Firebase error: "+e));
+              }}
               style={{
                 width:"100%",marginTop:14,padding:"18px 0",
                 background:isLeading
