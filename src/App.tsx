@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v21");
+const fbRef=()=>ref(getDb(),"psAuction_v22");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -66,11 +66,11 @@ interface Player{id:number;name:string;role:string;tier:string;country:string;im
 interface SquadPlayer extends Player{soldPrice:number;isMarquee:boolean;round:number;isCaptain?:boolean;}
 interface Team{id:number;name:string;short:string;color:string;accent:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
 interface LogItem{icon:string;text:string;time:string;}
-interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];rotatingPool?:number[];}
+interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;firstBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];rotatingPool?:number[];}
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=21;
+const TOTAL_ROUNDS=3; const DATA_VERSION=22;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -204,7 +204,7 @@ const INIT_TEAMS=buildInitTeams();
 const INIT_STATE:AuctionState={
   queue:[],curIdx:0,curBid:0,curBidder:null,
   aRound:0,phase:"banner",showSold:false,aDone:false,
-  log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,skippedTeams:[],rotatingPool:[],
+  log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,skippedTeams:[],rotatingPool:[],firstBidder:null,
 };
 
 // ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
@@ -784,7 +784,7 @@ export default function App() {
             } else {
               const safe:AuctionState={
                 ...INIT_STATE,...raw,
-                queue:safeArr(raw.queue),log:safeArr(raw.log),skippedTeams:safeArr(raw.skippedTeams),rotatingPool:safeArr(raw.rotatingPool),
+                queue:safeArr(raw.queue),log:safeArr(raw.log),skippedTeams:safeArr(raw.skippedTeams),rotatingPool:safeArr(raw.rotatingPool),firstBidder:raw.firstBidder??null,
                 teams:safeArr(raw.teams).map(t=>({...t,squad:safeArr(t.squad)})),
                 players:safeArr(raw.players),
                 lastSold:raw.lastSold??null,
@@ -825,7 +825,7 @@ export default function App() {
     if(!queue.length){alert("No unsold players!");return;}
     const first=snap.players.find(p=>p.id===queue[0]);
     const log=addLog(snap,"🎙️",`Round ${round} started! ${queue.length} players.`);
-    await write({...snap,queue,curIdx:0,curBid:0,curBidder:null,aRound:round,phase:"running",showSold:false,log,lastSold:null});
+    await write({...snap,queue,curIdx:0,curBid:0,curBidder:null,firstBidder:null,aRound:round,phase:"running",showSold:false,log,lastSold:null});
   };
 
   const placeBid=async(tid:number)=>{
@@ -849,8 +849,10 @@ export default function App() {
     if(team.purse<nb)return;
     // When a team bids, remove them from skipped list (they're back in)
     const skipped=safeArr(snap.skippedTeams).filter(id=>id!==tid);
+    // Set firstBidder only on the very first bid (when no one had bid before)
+    const firstBidder=snap.firstBidder!==null?snap.firstBidder:(snap.curBidder===null?tid:snap.firstBidder);
     const log=addLog(snap,"💰",`${team.short} bid ${fmt(nb)} for ${cp.name}`);
-    await patch({curBid:nb,curBidder:tid,log,skippedTeams:skipped} as Partial<AuctionState>);
+    await patch({curBid:nb,curBidder:tid,firstBidder,log,skippedTeams:skipped} as Partial<AuctionState>);
   };
 
   // SKIP: captain passes on this player. If ALL teams have skipped → mark unsold.
@@ -959,7 +961,7 @@ export default function App() {
       }
     } else {
       const np=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[next]);
-      await patch({curIdx:next,curBid:0,curBidder:null,showSold:false,lastSold:null,skippedTeams:[]} as Partial<AuctionState>);
+      await patch({curIdx:next,curBid:0,curBidder:null,firstBidder:null,showSold:false,lastSold:null,skippedTeams:[]} as Partial<AuctionState>);
     }
   };
 
@@ -1517,13 +1519,13 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
             {/* Big bid display */}
             <div className="cur-bid-display">
               <div className="cbd-label">
-                {isLeading&&curBidSafe===curPlayer?.basePrice
-                  ?"🎯 YOU ARE FIRST BIDDER"
+                {isLeading&&st.firstBidder===myTeam.id&&st.curBidder===myTeam.id&&curBidSafe===curPlayer?.basePrice
+                  ?"🎯 YOU ARE THE FIRST BIDDER"
                   :isLeading
                   ?"🔥 YOU ARE LEADING!"
                   :st.curBidder!==null
                   ?"⚡ SOMEONE IS LEADING"
-                  :"🎯 OPENING PRICE"}
+                  :"🎯 OPENING PRICE — BID TO START"}
               </div>
               <div className={`cbd-amount ${isLeading?"leading-amount":""}`}>{fmt(st.curBidder!==null?Math.max(st.curBid,curPlayer?.basePrice??100):curPlayer?.basePrice??100)}</div>
               {!isLeading&&st.curBidder!==null&&leadTeam&&(
@@ -1534,7 +1536,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
               {isLeading&&(
                 <div className="cbd-leader" style={{background:"rgba(0,255,136,.12)",color:"var(--ok)"}}>
                   {curBidSafe===curPlayer?.basePrice
-                    ?`✓ You are the first bidder at ${fmt(curPlayer?.basePrice??100)} — if others pass, you win!`
+                    ?`✓ You bid first at ${fmt(curPlayer?.basePrice??100)} pts — if others pass you win this player!`
                     :"✓ Your bid is highest — raise if needed if someone counter-bids!"}
                 </div>
               )}
