@@ -815,7 +815,7 @@ export default function App() {
   const patch=useCallback(async(p:Partial<AuctionState>)=>{setSaving(true);try{await patchSt(p);}catch(e){console.error(e);}setSaving(false);},[]);
 
   const startRound=async(round:number)=>{
-    const snap=st; // use local state
+    const snap=await readSt(); // needs fresh data to get unsold players
     const captainIds=Object.values(CAPTAIN_MAP);
     const sorted=[...safeArr(snap.players)]
       .filter(p=>!captainIds.includes(p.id)) // exclude captains from auction
@@ -924,7 +924,7 @@ export default function App() {
   };
 
   const advance=async()=>{
-    const snap=st; // use local state — same as other functions
+    const snap=await readSt(); // MUST use fresh Firebase read — runs after setTimeout so st is stale
 
     // ── Check if all squads are already full ──────────────────────────────
     // Only end early if ALL teams have full squads (8/8 each)
