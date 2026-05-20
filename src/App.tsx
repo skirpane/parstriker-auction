@@ -1543,9 +1543,12 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
               )}
             </div>
 
-            {/* BID BUTTON — simplified, no disabled prop to avoid click blocking */}
+            {/* BID BUTTON */}
             <div
-              onClick={()=>{ if(canBidNow && !isLeading) onBid(myTeam.id); }}
+              onClick={()=>{
+                alert(`Debug:\nphase=${st.phase}\ncurPlayer=${curPlayer?.name}\ncanBidNow=${canBidNow}\nisLeading=${isLeading}\nsquad=${safeArr(myTeam.squad).length}\nmarquee=${myTeam.marqueeCount}\npurse=${myTeam.purse}\nshowSold=${st.showSold}`);
+                if(canBidNow && !isLeading) onBid(myTeam.id);
+              }}
               style={{
                 width:"100%",marginTop:14,padding:"18px 0",
                 background:isLeading
