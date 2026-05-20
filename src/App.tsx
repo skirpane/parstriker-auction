@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v14");
+const fbRef=()=>ref(getDb(),"psAuction_v16");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=14;
+const TOTAL_ROUNDS=3; const DATA_VERSION=16;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -126,8 +126,7 @@ const PLAYER_PRICES:Record<number,number>={
   // Captains (4, 8, 18) pre-assigned — 100 pts reference only
   1:100,2:100,3:100,4:100,5:100,6:100,7:100,8:100,9:100,10:100,
   11:100,12:100,13:100,14:100,15:100,16:100,17:100,18:100,19:100,20:100,
-  21:100,22:100,23:100,24:100,25:100,26:100,27:100,28:100,29:100,30:100,
-  31:100,32:100,33:100,
+  21:100,22:100,23:100,24:100,25:100,26:100,27:100,
 };
 
 
@@ -865,7 +864,7 @@ export default function App() {
     const activeBidders=safeArr(snap.teams).filter(t=>
       safeArr(t.squad).length<MAX_SQUAD &&
       t.marqueeCount<MAX_MARQUEE &&
-      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?snap.curBid:snap.curBid+MIN_BID) && // only +10 if outbidding
+      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?snap.curBid:snap.curBid+MIN_BID) &&
       !skipped.includes(t.id)
     );
     const log=addLog(snap,"⏭️",`${team.short} passed on ${cp.name}`);
