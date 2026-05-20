@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v22");
+const fbRef=()=>ref(getDb(),"psAuction_v23");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=22;
+const TOTAL_ROUNDS=3; const DATA_VERSION=23;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -811,8 +811,9 @@ export default function App() {
     const time=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
     return [{icon,text,time},...safeArr(prev.log).slice(0,59)];
   };
-  const write=useCallback(async(next:AuctionState)=>{setSaving(true);try{await writeSt(next);}catch(e){console.error(e);}setSaving(false);},[]);
-  const patch=useCallback(async(p:Partial<AuctionState>)=>{setSaving(true);try{await patchSt(p);}catch(e){console.error(e);}setSaving(false);},[]);
+  // Direct Firebase functions — no useCallback stale closure issues
+  const write=async(next:AuctionState)=>{try{await set(ref(getDb(),"psAuction_v23"),next);}catch(e){console.error("write error",e);}};
+  const patch=async(p:Partial<AuctionState>)=>{try{await update(ref(getDb(),"psAuction_v23"),p);}catch(e){console.error("patch error",e);}};
 
   const startRound=async(round:number)=>{
     const snap=await readSt(); // needs fresh data to get unsold players
@@ -824,7 +825,7 @@ export default function App() {
     if(!queue.length){alert("No unsold players!");return;}
     const first=snap.players.find(p=>p.id===queue[0]);
     const log=addLog(snap,"🎙️",`Round ${round} started! ${queue.length} players.`);
-    await write({...snap,queue,curIdx:0,curBid:0,curBidder:null,firstBidder:null,aRound:round,phase:"running",showSold:false,log,lastSold:null});
+    await set(ref(getDb(),"psAuction_v23"),{...snap,queue,curIdx:0,curBid:0,curBidder:null,firstBidder:null,aRound:round,phase:"running",showSold:false,log,lastSold:null});
   };
 
   const placeBid=async(tid:number)=>{
@@ -846,7 +847,7 @@ export default function App() {
     const skipped=safeArr(snap.skippedTeams).filter(id=>id!==tid);
     const firstBidder=snap.firstBidder!==null?snap.firstBidder:(snap.curBidder===null?tid:snap.firstBidder);
     const log=addLog(snap,"💰",`${team.short} bid ${fmt(nb)} for ${cp.name}`);
-    await patch({curBid:nb,curBidder:tid,firstBidder,log,skippedTeams:skipped} as Partial<AuctionState>);
+    await update(ref(getDb(),"psAuction_v23"),{curBid:nb,curBidder:tid,firstBidder,log,skippedTeams:skipped});
   };
 
   // SKIP: captain passes on this player. If ALL teams have skipped → mark unsold.
@@ -867,10 +868,10 @@ export default function App() {
     if(activeBidders.length===0){
       // All teams skipped → auto unsold
       const log2=addLog({...snap,log},"❌",`${cp.name} UNSOLD — all teams passed`);
-      await patch({log:log2,skippedTeams:[],lastSold:null,firstBidder:null} as Partial<AuctionState>);
+      await update(ref(getDb(),"psAuction_v23"),{log:log2,skippedTeams:[],lastSold:null,firstBidder:null});
       advance();
     } else {
-      await patch({log,skippedTeams:skipped,firstBidder:snap.firstBidder??null} as Partial<AuctionState>);
+      await update(ref(getDb(),"psAuction_v23"),{log,skippedTeams:skipped,firstBidder:snap.firstBidder??null});
     }
   };
 
@@ -892,7 +893,7 @@ export default function App() {
     if(teamId===snap.curBidder&&winnerTeam){
       setCelebPopup({playerName:cp.name,price:snap.curBid,purseLeft:winnerTeam.purse});
     }
-    await write({...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:snap.firstBidder??null});
+    await set(ref(getDb(),"psAuction_v23"),{...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:snap.firstBidder??null});
     setTimeout(()=>advance(),2100);
   };
 
@@ -900,8 +901,8 @@ export default function App() {
     const snap=st; // use local state
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp)return;
-    const log=addLog(snap,"❌",`${cp.name} UNSOLD (Round ${snap.aRound})`);
-    await patch({log,lastSold:null,firstBidder:null} as Partial<AuctionState>);
+    const log=addLog(snap,"❌",`${cp.name} UNSOLD`);
+    await update(ref(getDb(),"psAuction_v23"),{log,lastSold:null,firstBidder:null,showSold:false});
     advance();
   };
 
@@ -919,68 +920,66 @@ export default function App() {
       ?{...p,soldTo:teamId,soldPrice:0,round:snap.aRound}:p);
     const log=addLog(snap,"🎁",`${cp.name} → ${team.short} (base price — purse empty)`);
     const lastSold={playerName:cp.name,teamName:team.name,teamColor:team.color,teamId:team.id,price:0};
-    await write({...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:null});
+    await set(ref(getDb(),"psAuction_v23"),{...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:null});
     setTimeout(()=>advance(),2100);
   };
 
   const advance=async()=>{
-    const snap=await readSt(); // MUST use fresh Firebase read — runs after setTimeout so st is stale
+    const snap=await readSt();
+    const captainIds=Object.values(CAPTAIN_MAP);
 
-    // ── Check if all squads are already full ──────────────────────────────
-    // Only end early if ALL teams have full squads (8/8 each)
-    const allFull=safeArr(snap.teams).every(t=>safeArr(t.squad).length>=MAX_SQUAD);
-    if(allFull){
-      const captainIds=Object.values(CAPTAIN_MAP);
-      const alreadyInPool=safeArr(snap.rotatingPool);
-      const remainingQueue=safeArr(snap.queue).slice(snap.curIdx+1);
-      const allUnsold=safeArr(snap.players)
-        .filter(p=>p.soldTo===null&&!captainIds.includes(p.id))
-        .map(p=>p.id);
-      const rotating=[...new Set([...alreadyInPool,...allUnsold,...remainingQueue])];
-      const log=addLog(snap,"🏆","All 3 squads full! Auction complete.");
-      await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
+    // Teams still needing players
+    const teamsNeedMore=safeArr(snap.teams).filter(t=>
+      safeArr(t.squad).length<MAX_SQUAD && t.marqueeCount<MAX_MARQUEE
+    );
+
+    // All full → done
+    if(teamsNeedMore.length===0){
+      const unsold=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id)).map(p=>p.id);
+      const pool=[...new Set([...safeArr(snap.rotatingPool),...unsold])];
+      const log=addLog(snap,"🏆","All squads complete! Auction done.");
+      await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:pool});
       return;
     }
 
     const next=snap.curIdx+1;
-    if(next>=safeArr(snap.queue).length){
-      // End of current round — collect unsold into rotating pool so far
-      const captainIds=Object.values(CAPTAIN_MAP);
-      const unsoldSoFar=safeArr(snap.players)
-        .filter(p=>p.soldTo===null&&!captainIds.includes(p.id))
-        .map(p=>p.id);
-      const rotating=[...new Set([...safeArr(snap.rotatingPool),...unsoldSoFar])];
 
-      if(snap.aRound>=TOTAL_ROUNDS){
-        // All 3 rounds done — finish
-        const log=addLog(snap,"🏆",`All ${TOTAL_ROUNDS} rounds complete! ${unsoldSoFar.length} players in Rotating Pool.`);
-        await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
-      } else {
-        // Check if next round is worth running:
-        // Need BOTH (a) unsold players exist AND (b) at least one team has slots left
-        const teamsWithSlots=safeArr(snap.teams).filter(t=>
-          safeArr(t.squad).length<MAX_SQUAD &&
-          t.marqueeCount<MAX_MARQUEE
-        );
-        const hasUnsold=unsoldSoFar.length>0;
-
-        if(!hasUnsold||teamsWithSlots.length===0){
-          // Nothing to auction — skip to done
-          const log=addLog(snap,"🏆","All players assigned! Auction complete.");
-          await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
-        } else {
-          // Go to next round banner — always proceed if there are unsold players AND teams with space
-          const nextRound=snap.aRound+1;
-          const log=addLog(snap,"🔔",`Round ${snap.aRound} complete! ${unsoldSoFar.length} unsold players → Round ${nextRound} of ${TOTAL_ROUNDS}`);
-          await write({...snap,showSold:false,phase:"banner",log,lastSold:null,rotatingPool:rotating});
-        }
-      }
-    } else {
-      const np=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[next]);
-      await patch({curIdx:next,curBid:0,curBidder:null,firstBidder:null,showSold:false,lastSold:null,skippedTeams:[]} as Partial<AuctionState>);
+    // More players in queue → just advance
+    if(next<safeArr(snap.queue).length){
+      await update(ref(getDb(),"psAuction_v23"),{curIdx:next,curBid:0,curBidder:null,firstBidder:null,showSold:false,lastSold:null,skippedTeams:[]});
+      return;
     }
-  };
 
+    // Queue exhausted — check unsold players
+    const unsoldPlayers=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
+    const teamsCanBid=teamsNeedMore.filter(t=>t.purse>=100);
+
+    if(unsoldPlayers.length===0){
+      // No unsold players left → done
+      const log=addLog(snap,"🏆","All available players assigned! Auction complete.");
+      await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:[]});
+      return;
+    }
+
+    if(teamsCanBid.length===0){
+      // All teams broke → admin assigns remaining via GIVE AT BASE
+      const pool=unsoldPlayers.map(p=>p.id);
+      const log=addLog(snap,"💰",`All teams at budget limit. Admin assigns ${unsoldPlayers.length} remaining players.`);
+      await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:pool});
+      return;
+    }
+
+    // Restart auction with unsold players only — no banner, straight back to running
+    const newQueue=unsoldPlayers.sort((a,b)=>b.basePrice-a.basePrice).map(p=>p.id);
+    const nextPass=snap.aRound+1;
+    const log=addLog(snap,"🔄",`Pass ${nextPass}: ${newQueue.length} unsold players back in! Teams still need players.`);
+    await set(ref(getDb(),"psAuction_v23"),{
+      ...snap,
+      queue:newQueue,curIdx:0,curBid:0,curBidder:null,firstBidder:null,
+      aRound:nextPass,phase:"running",showSold:false,
+      log,lastSold:null,skippedTeams:[],
+    });
+  }
   const resetAll=async()=>{if(!confirm("Reset ALL data?"))return;prevLastSold.current=null;await writeSt(INIT_STATE);};
   const logout=()=>{setRole("login");setTeamId(null);};
   const curPlayer=safeArr(st.queue).length>0?safeArr(st.players).find(p=>p.id===st.queue[st.curIdx]):undefined;
@@ -1312,7 +1311,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                         const fb3=st.firstBidder!==null?st.firstBidder:team.id;
                         const time3=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
                         const log3=[{icon:"💰",text:`${team.short} bid ${fmt(nb3)} for ${cp3.name}`,time:time3},...safeArr(st.log).slice(0,59)];
-                        update(ref(getDb(),"psAuction_v22"),{curBid:nb3,curBidder:team.id,firstBidder:fb3,log:log3,skippedTeams:skipped3});
+                        update(ref(getDb(),"psAuction_v23"),{curBid:nb3,curBidder:team.id,firstBidder:fb3,log:log3,skippedTeams:skipped3});
                       }}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                           <TeamLogo teamId={team.id} size={24}/>
@@ -1626,7 +1625,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                 const fb2=st.firstBidder!==null?st.firstBidder:myTeam.id;
                 const time2=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
                 const log2=[{icon:"💰",text:`${myTeam.short} bid ${fmt(nb2)} for ${cp2.name}`,time:time2},...safeArr(st.log).slice(0,59)];
-                update(ref(getDb(),"psAuction_v22"),{curBid:nb2,curBidder:myTeam.id,firstBidder:fb2,log:log2,skippedTeams:skipped2});
+                update(ref(getDb(),"psAuction_v23"),{curBid:nb2,curBidder:myTeam.id,firstBidder:fb2,log:log2,skippedTeams:skipped2});
               }}
               style={{
                 width:"100%",marginTop:14,padding:"18px 0",
@@ -1669,9 +1668,9 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                 const log4=[{icon:"⏭️",text:`${myTeam.short} passed on ${cp4.name}`,time:time4},...safeArr(st.log).slice(0,59)];
                 if(active4.length===0&&st.curBidder===null){
                   const log4b=[{icon:"❌",text:`${cp4.name} UNSOLD — all teams passed`,time:time4},...log4.slice(0,59)];
-                  update(ref(getDb(),"psAuction_v22"),{log:log4b,skippedTeams:[],lastSold:null,firstBidder:null});
+                  update(ref(getDb(),"psAuction_v23"),{log:log4b,skippedTeams:[],lastSold:null,firstBidder:null});
                 } else {
-                  update(ref(getDb(),"psAuction_v22"),{log:log4,skippedTeams:skipped4});
+                  update(ref(getDb(),"psAuction_v23"),{log:log4,skippedTeams:skipped4});
                 }
               }}
                 style={{width:"100%",marginTop:8,padding:"11px 0",background:"transparent",
@@ -2075,4 +2074,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v22 — continuous rounds fix</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — no rounds, continuous</span></div></div>);}
