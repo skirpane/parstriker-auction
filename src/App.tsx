@@ -23,7 +23,21 @@ const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=get
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
 const fbRef=()=>ref(getDb(),"psAuction_v23");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
-const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
+const safeParse=(raw:any):AuctionState=>{
+  // Firebase can return arrays as objects {0:x,1:y} — normalize everything
+  const toArr=(v:any)=>!v?[]:Array.isArray(v)?v:Object.values(v);
+  return{
+    ...raw,
+    queue:toArr(raw.queue),
+    log:toArr(raw.log),
+    skippedTeams:toArr(raw.skippedTeams),
+    rotatingPool:toArr(raw.rotatingPool),
+    firstBidder:raw.firstBidder??null,
+    teams:toArr(raw.teams).map((t:any)=>({...t,squad:toArr(t.squad)})),
+    players:toArr(raw.players),
+  };
+};
+const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?safeParse(s.val()):INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
 const patchSt=async(p:Partial<AuctionState>)=>update(fbRef(),p);
 
@@ -783,9 +797,7 @@ export default function App() {
             } else {
               const safe:AuctionState={
                 ...INIT_STATE,...raw,
-                queue:safeArr(raw.queue),log:safeArr(raw.log),skippedTeams:safeArr(raw.skippedTeams),rotatingPool:safeArr(raw.rotatingPool),firstBidder:raw.firstBidder??null,
-                teams:safeArr(raw.teams).map(t=>({...t,squad:safeArr(t.squad)})),
-                players:safeArr(raw.players),
+                ...safeParse(raw),
                 lastSold:raw.lastSold??null,
               };
               setSt(safe);
@@ -2074,4 +2086,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — no rounds, continuous</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — safeParse fix</span></div></div>);}
