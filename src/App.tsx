@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=22;
+const TOTAL_ROUNDS=3; const DATA_VERSION=22; // firstBidder added — backward compatible
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -873,10 +873,10 @@ export default function App() {
     if(activeBidders.length===0){
       // All teams skipped → auto unsold
       const log2=addLog({...snap,log},"❌",`${cp.name} UNSOLD — all teams passed`);
-      await patch({log:log2,skippedTeams:[],lastSold:null} as Partial<AuctionState>);
+      await patch({log:log2,skippedTeams:[],lastSold:null,firstBidder:null} as Partial<AuctionState>);
       advance();
     } else {
-      await patch({log,skippedTeams:skipped} as Partial<AuctionState>);
+      await patch({log,skippedTeams:skipped,firstBidder:snap.firstBidder??null} as Partial<AuctionState>);
     }
   };
 
@@ -898,7 +898,7 @@ export default function App() {
     if(teamId===snap.curBidder&&winnerTeam){
       setCelebPopup({playerName:cp.name,price:snap.curBid,purseLeft:winnerTeam.purse});
     }
-    await write({...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold});
+    await write({...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:snap.firstBidder??null});
     setTimeout(()=>advance(),2100);
   };
 
@@ -907,7 +907,7 @@ export default function App() {
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp)return;
     const log=addLog(snap,"❌",`${cp.name} UNSOLD (Round ${snap.aRound})`);
-    await patch({log,lastSold:null} as Partial<AuctionState>);
+    await patch({log,lastSold:null,firstBidder:null} as Partial<AuctionState>);
     advance();
   };
 
@@ -1567,8 +1567,19 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
               </div>
             )}
             {!canBid&&!isLeading&&!hasSkipped&&(
-              <div style={{fontSize:10,color:"var(--mut)",marginTop:8}}>
-                {myTeam.purse<nextBid?"💰 Purse empty — admin will assign remaining players to you at base price":myTeam.marqueeCount>=MAX_MARQUEE?"✅ All 7 picks complete":"Bidding paused"}
+              <div style={{fontSize:11,color:"var(--mut)",marginTop:8,textAlign:"center",
+                background:"rgba(255,255,255,.04)",borderRadius:8,padding:"7px 12px",lineHeight:1.6}}>
+                {st.phase!=="running"
+                  ?"⏳ Waiting for admin to start the auction"
+                  :st.showSold
+                  ?"⏳ Player just sold — next coming..."
+                  :safeArr(myTeam.squad).length>=MAX_SQUAD
+                  ?"✅ Squad full (8/8)"
+                  :myTeam.marqueeCount>=MAX_MARQUEE
+                  ?"✅ All 7 picks used"
+                  :myTeam.purse<nextBid
+                  ?"💰 Purse empty — tell admin which player you want"
+                  :"⏳ Bidding paused — try refreshing"}
               </div>
             )}
           </>)}
