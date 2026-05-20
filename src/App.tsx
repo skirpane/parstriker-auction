@@ -491,8 +491,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-
 .cbb{width:100%;margin-top:14px;padding:18px;border:none;border-radius:13px;color:#fff;font-family:'Bebas Neue';font-size:24px;letter-spacing:4px;cursor:pointer;transition:all .25s;font-weight:900;position:relative;overflow:hidden}
 .cbb:hover:not(:disabled){transform:translateY(-3px)}
 .cbb:disabled{opacity:.32;cursor:not-allowed}
-.cbb::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(ellipse,rgba(255,255,255,.2),transparent 60%);pointer-events:none;opacity:0;transition:opacity .2s}
-.cbb:hover::after{opacity:1}
+/* cbb::after removed */
 
 /* Captain side panel */
 .cap-side-sec{padding:12px;border-bottom:1px solid rgba(56,189,248,.1)}
@@ -1544,22 +1543,45 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
               )}
             </div>
 
-            {/* BID BUTTON */}
-            <button className="cbb"
-              style={{background:isLeading?"linear-gradient(135deg,var(--ok),#00cc66)":"linear-gradient(135deg,#7c3aed,#4f46e5)"}}
-              disabled={!canBidNow} onClick={()=>onBid(myTeam.id)}>
-              {isLeading?`✓ LEADING ${fmt(curBidSafe)}`:canBidNow?`🔨 BID ${fmt(nextBid)}`:"CANNOT BID"}
-            </button>
+            {/* BID BUTTON — simplified, no disabled prop to avoid click blocking */}
+            <div
+              onClick={()=>{ if(canBidNow && !isLeading) onBid(myTeam.id); }}
+              style={{
+                width:"100%",marginTop:14,padding:"18px 0",
+                background:isLeading
+                  ?"linear-gradient(135deg,#34d399,#059669)"
+                  :canBidNow
+                  ?"linear-gradient(135deg,#7c3aed,#4f46e5)"
+                  :"rgba(255,255,255,.06)",
+                borderRadius:13,
+                color:canBidNow||isLeading?"#fff":"var(--mut)",
+                fontFamily:"'Bebas Neue'",fontSize:24,letterSpacing:4,
+                cursor:canBidNow&&!isLeading?"pointer":"default",
+                textAlign:"center",
+                border:canBidNow&&!isLeading?"2px solid rgba(255,255,255,.2)":"2px solid transparent",
+                userSelect:"none",
+                WebkitUserSelect:"none",
+                touchAction:"manipulation",
+                position:"relative",
+                zIndex:20,
+              }}>
+              {isLeading
+                ?`✓ LEADING ${fmt(curBidSafe)}`
+                :canBidNow
+                ?`🔨 BID ${fmt(nextBid)}`
+                :"CANNOT BID"}
+            </div>
 
-            {/* PASS button — skip this player, re-enter if someone else bids */}
+            {/* PASS button */}
             {!isLeading&&st.phase==="running"&&!st.showSold&&(
-              <button onClick={()=>onSkip(myTeam.id)}
-                style={{width:"100%",marginTop:8,padding:"11px",background:"transparent",
+              <div onClick={()=>onSkip(myTeam.id)}
+                style={{width:"100%",marginTop:8,padding:"11px 0",background:"transparent",
                   border:`1px solid ${isSkipped?"rgba(251,146,60,.6)":"rgba(251,146,60,.25)"}`,
                   borderRadius:11,color:isSkipped?"var(--warn)":"rgba(251,146,60,.6)",
-                  fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:3,cursor:"pointer",transition:"all .2s"}}>
+                  fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:3,cursor:"pointer",
+                  textAlign:"center",touchAction:"manipulation",zIndex:20,position:"relative"}}>
                 {isSkipped?"⏭ PASSED — WAIT FOR OTHERS":"⏭ PASS THIS PLAYER"}
-              </button>
+              </div>
             )}
             {hasSkipped&&!isLeading&&(
               <div style={{fontSize:10,color:"rgba(251,146,60,.8)",marginTop:6,textAlign:"center",
