@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=22; // firstBidder added — backward compatible
+const TOTAL_ROUNDS=3; const DATA_VERSION=22;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -1058,7 +1058,7 @@ export default function App() {
 
     {role==="login"&&<LoginScreen teams={safeArr(st.teams)} onLogin={(r,tid)=>{setRole(r);if(tid!==undefined)setTeamId(tid);}}/>}
     {role==="admin"&&<AdminView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} progPct={progPct} onBid={placeBid} onSold={doSold} onUnsold={doUnsold} onSkip={doSkip} onStartRound={startRound} onLogout={logout} onReset={resetAll} canBid={canBid} hasSkipped={hasSkipped}/>}
-    {role==="captain"&&myTeam&&<CaptainView myTeam={myTeam} st={st} curPlayer={curPlayer} onBid={placeBid} onSkip={doSkip} onLogout={logout} canBid={canBid(myTeam)} hasSkipped={hasSkipped(myTeam.id)}/>}
+    {role==="captain"&&myTeam&&<CaptainView myTeam={myTeam} st={st} curPlayer={curPlayer} onBid={placeBid} onSkip={doSkip} onLogout={logout} canBid={canBid} hasSkipped={hasSkipped}/>}
     {role==="viewer"&&<ViewerView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} onLogout={logout}/>}
   </>);
 }
@@ -1405,9 +1405,11 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
 
 // ─── CAPTAIN ──────────────────────────────────────────────────────────────────
 function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkipped}:{
-  myTeam:Team;st:AuctionState;curPlayer:Player|undefined;onBid:(id:number)=>void;onSkip:(id:number)=>void;onLogout:()=>void;canBid:boolean;hasSkipped:boolean;
+  myTeam:Team;st:AuctionState;curPlayer:Player|undefined;onBid:(id:number)=>void;onSkip:(id:number)=>void;onLogout:()=>void;canBid:(t:Team)=>boolean;hasSkipped:(id:number)=>boolean;
 }){
   const isLeading=st.curBidder===myTeam.id;
+  const canBidNow=canBid(myTeam);
+  const isSkipped=hasSkipped(myTeam.id);
   const pctLeft=(myTeam.purse/PURSE)*100;
   // nextBid: price this captain would pay if they bid now
   // Uses max(curBid, basePrice) as floor to prevent 0+10=10 display bug
@@ -1545,18 +1547,18 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
             {/* BID BUTTON */}
             <button className="cbb"
               style={{background:isLeading?"linear-gradient(135deg,var(--ok),#00cc66)":"linear-gradient(135deg,#7c3aed,#4f46e5)"}}
-              disabled={!canBid} onClick={()=>onBid(myTeam.id)}>
-              {isLeading?`✓ LEADING ${fmt(curBidSafe)}`:canBid?`🔨 BID ${fmt(nextBid)}`:"CANNOT BID"}
+              disabled={!canBidNow} onClick={()=>onBid(myTeam.id)}>
+              {isLeading?`✓ LEADING ${fmt(curBidSafe)}`:canBidNow?`🔨 BID ${fmt(nextBid)}`:"CANNOT BID"}
             </button>
 
             {/* PASS button — skip this player, re-enter if someone else bids */}
             {!isLeading&&st.phase==="running"&&!st.showSold&&(
               <button onClick={()=>onSkip(myTeam.id)}
                 style={{width:"100%",marginTop:8,padding:"11px",background:"transparent",
-                  border:`1px solid ${hasSkipped?"rgba(251,146,60,.6)":"rgba(251,146,60,.25)"}`,
-                  borderRadius:11,color:hasSkipped?"var(--warn)":"rgba(251,146,60,.6)",
+                  border:`1px solid ${isSkipped?"rgba(251,146,60,.6)":"rgba(251,146,60,.25)"}`,
+                  borderRadius:11,color:isSkipped?"var(--warn)":"rgba(251,146,60,.6)",
                   fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:3,cursor:"pointer",transition:"all .2s"}}>
-                {hasSkipped?"⏭ PASSED — WAIT FOR OTHERS":"⏭ PASS THIS PLAYER"}
+                {isSkipped?"⏭ PASSED — WAIT FOR OTHERS":"⏭ PASS THIS PLAYER"}
               </button>
             )}
             {hasSkipped&&!isLeading&&(
@@ -1566,7 +1568,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                 You passed — you can still BID if another team bids first!
               </div>
             )}
-            {!canBid&&!isLeading&&!hasSkipped&&(
+            {!canBidNow&&!isLeading&&!isSkipped&&(
               <div style={{fontSize:11,color:"var(--mut)",marginTop:8,textAlign:"center",
                 background:"rgba(255,255,255,.04)",borderRadius:8,padding:"7px 12px",lineHeight:1.6}}>
                 {st.phase!=="running"
