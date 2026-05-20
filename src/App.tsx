@@ -905,6 +905,24 @@ export default function App() {
     advance();
   };
 
+  // Assign current player to a broke team at base price (0 pts deducted)
+  const doAssignFree=async(teamId:number)=>{
+    const snap=st;
+    const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
+    if(!cp||snap.phase!=="running")return;
+    const team=safeArr(snap.teams).find(t=>t.id===teamId);
+    if(!team)return;
+    const sp:SquadPlayer={...cp,soldPrice:0,isMarquee:true,round:snap.aRound,isCaptain:false};
+    const newTeams=safeArr(snap.teams).map(t=>t.id===teamId
+      ?{...t,squad:[...safeArr(t.squad),sp],marqueeCount:t.marqueeCount+1}:t);
+    const newPlayers=safeArr(snap.players).map(p=>p.id===cp.id
+      ?{...p,soldTo:teamId,soldPrice:0,round:snap.aRound}:p);
+    const log=addLog(snap,"🎁",`${cp.name} → ${team.short} (base price — purse empty)`);
+    const lastSold={playerName:cp.name,teamName:team.name,teamColor:team.color,teamId:team.id,price:0};
+    await write({...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:null});
+    setTimeout(()=>advance(),2100);
+  };
+
   const advance=async()=>{
     const snap=await readSt();
 
@@ -1051,7 +1069,7 @@ export default function App() {
     )}
 
     {role==="login"&&<LoginScreen teams={safeArr(st.teams)} onLogin={(r,tid)=>{setRole(r);if(tid!==undefined)setTeamId(tid);}}/>}
-    {role==="admin"&&<AdminView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} progPct={progPct} onBid={placeBid} onSold={doSold} onUnsold={doUnsold} onSkip={doSkip} onStartRound={startRound} onLogout={logout} onReset={resetAll} canBid={canBid} hasSkipped={hasSkipped}/>}
+    {role==="admin"&&<AdminView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} progPct={progPct} onBid={placeBid} onSold={doSold} onUnsold={doUnsold} onSkip={doSkip} onAssignFree={doAssignFree} onStartRound={startRound} onLogout={logout} onReset={resetAll} canBid={canBid} hasSkipped={hasSkipped}/>}
     {role==="captain"&&myTeam&&<CaptainView myTeam={myTeam} st={st} curPlayer={curPlayer} onBid={placeBid} onSkip={doSkip} onLogout={logout} canBid={canBid} hasSkipped={hasSkipped}/>}
     {role==="viewer"&&<ViewerView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} onLogout={logout}/>}
   </>);
@@ -1169,9 +1187,9 @@ function LoginScreen({teams,onLogin}:{teams:Team[];onLogin:(r:Role,tid?:number)=
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
-function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsold,onSkip,onStartRound,onLogout,onReset,canBid,hasSkipped}:{
+function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsold,onSkip,onAssignFree,onStartRound,onLogout,onReset,canBid,hasSkipped}:{
   st:AuctionState;curPlayer:Player|undefined;leadTeam:Team|undefined;soldCount:number;progPct:number;
-  onBid:(id:number)=>void;onSold:()=>void;onUnsold:()=>void;onSkip:(id:number)=>void;onStartRound:(r:number)=>void;onLogout:()=>void;onReset:()=>void;canBid:(t:Team)=>boolean;hasSkipped:(id:number)=>boolean;
+  onBid:(id:number)=>void;onSold:()=>void;onUnsold:()=>void;onSkip:(id:number)=>void;onAssignFree:(id:number)=>void;onStartRound:(r:number)=>void;onLogout:()=>void;onReset:()=>void;canBid:(t:Team)=>boolean;hasSkipped:(id:number)=>boolean;
 }){
   const [tab,setTab]=useState<"auction"|"players"|"teams">("auction");
   const [filter,setFilter]=useState("All");
@@ -1271,7 +1289,19 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                         style={{borderColor:isLead?team.color:skipped?"rgba(251,146,60,.4)":"var(--bd)",
                           background:isLead?`${team.color}22`:skipped?"rgba(251,146,60,.06)":"var(--s2)",
                           color:isLead?team.color:"var(--txt)"}}
-                        onClick={()=>onBid(team.id)}>
+                        onClick={()=>{
+                        const cp3=safeArr(st.players).find((p:Player)=>p.id===safeArr(st.queue)[st.curIdx]);
+                        if(!cp3||st.phase!=="running")return;
+                        const safeCur3=st.curBidder!==null?Math.max(st.curBid,cp3.basePrice):0;
+                        const nb3=st.curBidder===null?cp3.basePrice:safeCur3+MIN_BID;
+                        const t3=safeArr(st.teams).find((t:Team)=>t.id===team.id);
+                        if(!t3||t3.purse<nb3)return;
+                        const skipped3=safeArr(st.skippedTeams).filter((id:number)=>id!==team.id);
+                        const fb3=st.firstBidder!==null?st.firstBidder:team.id;
+                        const time3=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+                        const log3=[{icon:"💰",text:`${team.short} bid ${fmt(nb3)} for ${cp3.name}`,time:time3},...safeArr(st.log).slice(0,59)];
+                        update(ref(getDb(),"psAuction_v22"),{curBid:nb3,curBidder:team.id,firstBidder:fb3,log:log3,skippedTeams:skipped3});
+                      }}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                           <TeamLogo teamId={team.id} size={24}/>
                           {able&&<span style={{fontSize:9,color:st.curBidder===null?"var(--ok)":"var(--gold)",fontFamily:"'Bebas Neue'"}}>{fmt(nb)}{st.curBidder===null?" ★":""}</span>}
@@ -1281,7 +1311,12 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                         {isLead&&<div style={{fontSize:8,color:"var(--ok)",marginTop:1}}>● LEADING</div>}
                         {skipped&&!isLead&&<div style={{fontSize:8,color:"var(--warn)",marginTop:1}}>⏭ PASSED</div>}
                         {safeArr(team.squad).length>=MAX_SQUAD&&<div style={{fontSize:8,color:"var(--ng)",marginTop:1}}>FULL</div>}
-                        {team.purse<100&&safeArr(team.squad).length<MAX_SQUAD&&<div style={{fontSize:8,color:"var(--warn)",marginTop:1}}>💰 PURSE EMPTY</div>}
+                        {team.purse<100&&safeArr(team.squad).length<MAX_SQUAD&&(
+                          <div style={{fontSize:8,color:"var(--warn)",marginTop:2}}>💰 PURSE EMPTY</div>
+                        )}
+                        {safeArr(team.squad).length>=MAX_SQUAD&&(
+                          <div style={{fontSize:8,color:"var(--ok)",marginTop:2}}>✅ FULL</div>
+                        )}
                       </button>
                       {!isLead&&!st.showSold&&st.phase==="running"&&(
                         <button style={{background:"transparent",border:"1px solid rgba(251,146,60,.3)",
@@ -1295,6 +1330,35 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                   );
                 })}
               </div>
+              {/* ── ASSIGN TO BROKE TEAM — shown when any team has < 100 pts and needs players ── */}
+              {teams.some(t=>t.purse<100&&safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE)&&(
+                <div style={{marginBottom:10,background:"linear-gradient(135deg,rgba(52,211,153,.08),rgba(5,150,105,.05))",
+                  border:"1px solid rgba(52,211,153,.35)",borderRadius:12,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:"#34d399",fontFamily:"'Rajdhani'",fontWeight:700,
+                    letterSpacing:1,marginBottom:8,textTransform:"uppercase"}}>
+                    🎁 Assign at Base Price — Team Purse Empty
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:`repeat(${teams.filter(t=>t.purse<100&&safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE).length},1fr)`,gap:6}}>
+                    {teams.filter(t=>t.purse<100&&safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE).map(team=>(
+                      <button key={team.id}
+                        style={{padding:"10px 8px",background:"linear-gradient(135deg,rgba(52,211,153,.15),rgba(5,150,105,.2))",
+                          border:"2px solid rgba(52,211,153,.5)",borderRadius:10,cursor:"pointer",
+                          color:"#34d399",fontFamily:"'Bebas Neue'",fontSize:14,letterSpacing:1.5,
+                          display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                          transition:"all .2s"}}
+                        onClick={()=>onAssignFree(team.id)}
+                        onMouseOver={e=>(e.currentTarget.style.background="linear-gradient(135deg,rgba(52,211,153,.25),rgba(5,150,105,.3))")}
+                        onMouseOut={e=>(e.currentTarget.style.background="linear-gradient(135deg,rgba(52,211,153,.15),rgba(5,150,105,.2))")}>
+                        <TeamLogo teamId={team.id} size={28}/>
+                        <span>ASSIGN TO {team.name.toUpperCase()}</span>
+                        <span style={{fontSize:10,color:"rgba(52,211,153,.7)",fontFamily:"'DM Sans'",fontWeight:500,letterSpacing:0}}>
+                          {safeArr(team.squad).length}/{MAX_SQUAD} players · {MAX_MARQUEE-team.marqueeCount} slots left
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="ar">
                 <button className="sdb" disabled={st.curBidder===null||st.showSold} onClick={onSold}>🔨 SOLD</button>
                 <button className="usb" disabled={st.showSold} onClick={onUnsold}>❌ UNSOLD</button>
@@ -1542,7 +1606,6 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
             <div
               onClick={()=>{
                 if(!canBidNow||isLeading)return;
-                // Direct Firebase update — bypass all callbacks
                 const cp2=safeArr(st.players).find((p:Player)=>p.id===safeArr(st.queue)[st.curIdx]);
                 if(!cp2||st.phase!=="running")return;
                 const safeCur2=st.curBidder!==null?Math.max(st.curBid,cp2.basePrice):0;
@@ -1551,7 +1614,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                 const fb2=st.firstBidder!==null?st.firstBidder:myTeam.id;
                 const time2=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
                 const log2=[{icon:"💰",text:`${myTeam.short} bid ${fmt(nb2)} for ${cp2.name}`,time:time2},...safeArr(st.log).slice(0,59)];
-                update(ref(getDb(),"psAuction_v22"),{curBid:nb2,curBidder:myTeam.id,firstBidder:fb2,log:log2,skippedTeams:skipped2}).catch(e=>alert("Firebase error: "+e));
+                update(ref(getDb(),"psAuction_v22"),{curBid:nb2,curBidder:myTeam.id,firstBidder:fb2,log:log2,skippedTeams:skipped2});
               }}
               style={{
                 width:"100%",marginTop:14,padding:"18px 0",
@@ -1581,7 +1644,24 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
 
             {/* PASS button */}
             {!isLeading&&st.phase==="running"&&!st.showSold&&(
-              <div onClick={()=>onSkip(myTeam.id)}
+              <div onClick={()=>{
+                const cp4=safeArr(st.players).find((p:Player)=>p.id===safeArr(st.queue)[st.curIdx]);
+                if(!cp4||st.phase!=="running")return;
+                const skipped4=[...new Set([...safeArr(st.skippedTeams),myTeam.id])];
+                const active4=safeArr(st.teams).filter((t:Team)=>
+                  safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE&&
+                  t.purse>=(st.curBidder===null?cp4.basePrice:Math.max(st.curBid,cp4.basePrice)+MIN_BID)&&
+                  !skipped4.includes(t.id)&&t.id!==st.curBidder
+                );
+                const time4=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+                const log4=[{icon:"⏭️",text:`${myTeam.short} passed on ${cp4.name}`,time:time4},...safeArr(st.log).slice(0,59)];
+                if(active4.length===0&&st.curBidder===null){
+                  const log4b=[{icon:"❌",text:`${cp4.name} UNSOLD — all teams passed`,time:time4},...log4.slice(0,59)];
+                  update(ref(getDb(),"psAuction_v22"),{log:log4b,skippedTeams:[],lastSold:null,firstBidder:null});
+                } else {
+                  update(ref(getDb(),"psAuction_v22"),{log:log4,skippedTeams:skipped4});
+                }
+              }}
                 style={{width:"100%",marginTop:8,padding:"11px 0",background:"transparent",
                   border:`1px solid ${isSkipped?"rgba(251,146,60,.6)":"rgba(251,146,60,.25)"}`,
                   borderRadius:11,color:isSkipped?"var(--warn)":"rgba(251,146,60,.6)",
