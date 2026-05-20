@@ -828,11 +828,13 @@ export default function App() {
   };
 
   const placeBid=async(tid:number)=>{
+    try{
     const snap=await readSt();
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
-    if(!cp||snap.phase!=="running")return;
+    if(!cp){alert("BID FAILED: No current player found. Queue len="+safeArr(snap.queue).length+" idx="+snap.curIdx+" phase="+snap.phase);return;}
+    if(snap.phase!=="running"){alert("BID FAILED: phase="+snap.phase);return;}
     const team=safeArr(snap.teams).find(t=>t.id===tid);
-    if(!team)return;
+    if(!team){alert("BID FAILED: team not found id="+tid);return;}
     // ── PRICE RULE ────────────────────────────────────────────────────────
     // safeCurBid: floor curBid at basePrice to prevent race-condition where
     // Firebase still has curBid=0 when a second team reads and bids.
@@ -852,6 +854,7 @@ export default function App() {
     const firstBidder=snap.firstBidder!==null?snap.firstBidder:(snap.curBidder===null?tid:snap.firstBidder);
     const log=addLog(snap,"💰",`${team.short} bid ${fmt(nb)} for ${cp.name}`);
     await patch({curBid:nb,curBidder:tid,firstBidder,log,skippedTeams:skipped} as Partial<AuctionState>);
+    }catch(err:any){alert("BID ERROR: "+err?.message||String(err));}
   };
 
   // SKIP: captain passes on this player. If ALL teams have skipped → mark unsold.
@@ -1545,10 +1548,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
 
             {/* BID BUTTON */}
             <div
-              onClick={()=>{
-                alert(`Debug:\nphase=${st.phase}\ncurPlayer=${curPlayer?.name}\ncanBidNow=${canBidNow}\nisLeading=${isLeading}\nsquad=${safeArr(myTeam.squad).length}\nmarquee=${myTeam.marqueeCount}\npurse=${myTeam.purse}\nshowSold=${st.showSold}`);
-                if(canBidNow && !isLeading) onBid(myTeam.id);
-              }}
+              onClick={()=>{ if(canBidNow && !isLeading) onBid(myTeam.id); }}
               style={{
                 width:"100%",marginTop:14,padding:"18px 0",
                 background:isLeading
