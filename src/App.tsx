@@ -927,17 +927,17 @@ export default function App() {
     const snap=await readSt();
 
     // ── Check if all squads are already full ──────────────────────────────
+    // Only end early if ALL teams have full squads (8/8 each)
     const allFull=safeArr(snap.teams).every(t=>safeArr(t.squad).length>=MAX_SQUAD);
     if(allFull){
-      // Collect every unsold player (including remaining queue) into rotating pool
       const captainIds=Object.values(CAPTAIN_MAP);
       const alreadyInPool=safeArr(snap.rotatingPool);
-      const remainingQueue=safeArr(snap.queue).slice(snap.curIdx+1); // not yet seen
+      const remainingQueue=safeArr(snap.queue).slice(snap.curIdx+1);
       const allUnsold=safeArr(snap.players)
         .filter(p=>p.soldTo===null&&!captainIds.includes(p.id))
         .map(p=>p.id);
       const rotating=[...new Set([...alreadyInPool,...allUnsold,...remainingQueue])];
-      const log=addLog(snap,"🏆","All squads full! Remaining players form the Rotating Pool.");
+      const log=addLog(snap,"🏆","All 3 squads full! Auction complete.");
       await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
       return;
     }
@@ -952,22 +952,26 @@ export default function App() {
       const rotating=[...new Set([...safeArr(snap.rotatingPool),...unsoldSoFar])];
 
       if(snap.aRound>=TOTAL_ROUNDS){
-        const log=addLog(snap,"🏆",`Auction complete! ${rotating.length} players in Rotating Pool.`);
+        // All 3 rounds done — finish
+        const log=addLog(snap,"🏆",`All ${TOTAL_ROUNDS} rounds complete! ${unsoldSoFar.length} players in Rotating Pool.`);
         await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
       } else {
-        // Check if any unsold players can still be bid on next round
-        const biddable=unsoldSoFar.filter(pid=>{
-          return safeArr(snap.teams).some(t=>
-            safeArr(t.squad).length<MAX_SQUAD &&
-            t.marqueeCount<MAX_MARQUEE
-          );
-        });
-        if(biddable.length===0||allFull){
-          // No point running more rounds — go to done
-          const log=addLog(snap,"🏆","All squads full! Auction complete.");
+        // Check if next round is worth running:
+        // Need BOTH (a) unsold players exist AND (b) at least one team has slots left
+        const teamsWithSlots=safeArr(snap.teams).filter(t=>
+          safeArr(t.squad).length<MAX_SQUAD &&
+          t.marqueeCount<MAX_MARQUEE
+        );
+        const hasUnsold=unsoldSoFar.length>0;
+
+        if(!hasUnsold||teamsWithSlots.length===0){
+          // Nothing to auction — skip to done
+          const log=addLog(snap,"🏆","All players assigned! Auction complete.");
           await write({...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:rotating});
         } else {
-          const log=addLog(snap,"🔔",`Round ${snap.aRound} complete! ${biddable.length} unsold players re-enter.`);
+          // Go to next round banner — always proceed if there are unsold players AND teams with space
+          const nextRound=snap.aRound+1;
+          const log=addLog(snap,"🔔",`Round ${snap.aRound} complete! ${unsoldSoFar.length} unsold players → Round ${nextRound} of ${TOTAL_ROUNDS}`);
           await write({...snap,showSold:false,phase:"banner",log,lastSold:null,rotatingPool:rotating});
         }
       }
