@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v12");
+const fbRef=()=>ref(getDb(),"psAuction_v13");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=12;
+const TOTAL_ROUNDS=3; const DATA_VERSION=13;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -110,31 +110,20 @@ const CAPTAIN_MAP:{[teamId:number]:number}={1:4, 2:8, 3:18};
 // ══════════════════════════════════════════════════════════════════════════════
 //  FLAT POINTS SYSTEM — Everyone starts at 100 pts base
 //
-//  PURSE    : 800 pts per team
-//  BASE BID : 100 pts (every player)
-//  INCREMENT: 10 pts per raise
-//  PICKS    : 7 marquee players per team
+//  PURSE : 1100 pts  |  BASE : 100 pts  |  INCREMENT : 10 pts  |  PICKS : 7
 //
-//  WHY THIS IS EXCITING:
-//  ┌─────────────────────────────────────────────────────────────────────────┐
-//  │  Every player is equally valuable at the start — no "cheap" options    │
-//  │  Bidding wars are real — overpay one player and you're 100 pts short   │
-//  │  Budget math per team:                                                  │
-//  │    7 players × 100 base = 700 pts (87.5% of budget)                   │
-//  │    100 pts buffer for bidding wars                                      │
-//  │    Overpay one player by 100 → only 700 left for 6 → avg 116 → TIGHT! │
-//  │    Two bidding wars (+50 each) → 800 pts → exact budget used up!       │
-//  └─────────────────────────────────────────────────────────────────────────┘
+//  BID RULE:
+//  • First bid on a player  → 100 pts (base, no increase)
+//  • Next team outbids      → +10 pts each time
+//  • Only one team bidding  → gets player at BASE 100 pts exactly
 //
-//  STRATEGY IMPLICATION:
-//  • You can afford to overpay just ONE player by max 100 pts
-//  • Every bidding war costs you a future player
-//  • Pass on players you don't need — save budget for the ones you want
-//  • Watch opponents' purse bar — if they're low, bid aggressively!
+//  BUDGET MATH:
+//  7 players × 100 base = 700 pts used  |  400 pts buffer for bidding wars
+//  Win 4 bidding wars (+100 each)       → spend exactly 1100 pts (budget exhausted!)
 // ══════════════════════════════════════════════════════════════════════════════
 const PLAYER_PRICES:Record<number,number>={
-  // All 31 players — flat 100 pts base each
-  // Captains (4, 8, 18) are pre-assigned — 100 pts reference only
+  // All 33 players — flat 100 pts base each
+  // Captains (4, 8, 18) pre-assigned — 100 pts reference only
   1:100,2:100,3:100,4:100,5:100,6:100,7:100,8:100,9:100,10:100,
   11:100,12:100,13:100,14:100,15:100,16:100,17:100,18:100,19:100,20:100,
   21:100,22:100,23:100,24:100,25:100,26:100,27:100,28:100,29:100,30:100,
@@ -174,7 +163,7 @@ const RAW_PLAYERS=[
   {id:29, name:"Karan Shah",          role:"Batsman",              img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
   {id:30, name:"Vibhor",              role:"Batsman / WK",         img:"VB",   chUrl:"https://cricheroes.com/player-profile/33203217/vibhor-k-(wk)/matches"},
   {id:31, name:"Saravanan Marimuthu", role:"Batsman",              img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
-  {id:32, name:"Kayur",               role:"Bowling All-Rounders", img:"KAy",  chUrl:"https://cricheroes.com/player-profile/42050777/kayur-cric/matches"},
+  {id:32, name:"Kayur",               role:"Bowling All-Rounder",  img:"KAy",  chUrl:"https://cricheroes.com/player-profile/42050777/kayur-cric/matches"},
   {id:33, name:"Pranav",              role:"Batsman",              img:"PRn",  chUrl:"https://cricheroes.com/player-profile/42341403/pranav/matches"},
 ];
 
@@ -880,7 +869,7 @@ export default function App() {
     const activeBidders=safeArr(snap.teams).filter(t=>
       safeArr(t.squad).length<MAX_SQUAD &&
       t.marqueeCount<MAX_MARQUEE &&
-      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?snap.curBid:snap.curBid+MIN_BID) &&
+      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?snap.curBid:snap.curBid+MIN_BID) && // only +10 if outbidding
       !skipped.includes(t.id)
     );
     const log=addLog(snap,"⏭️",`${team.short} passed on ${cp.name}`);
@@ -990,14 +979,14 @@ export default function App() {
     if(st.showSold||!curPlayer||st.phase!=="running")return false;
     if(safeArr(team.squad).length>=MAX_SQUAD)return false;
     if(team.marqueeCount>=MAX_MARQUEE)return false;
-    // Same price rule as placeBid: only raises when a different team outbids
+    // Price rule: first bid = base price; outbidding someone = +10
     const nb=st.curBidder===null
-      ? curPlayer.basePrice             // first bid → base price
+      ? curPlayer.basePrice             // no one has bid → base price
       : st.curBidder===team.id
-        ? st.curBid                     // already leading → no raise needed
-        : st.curBid+MIN_BID;            // outbidding → raise by 5
+        ? st.curBid                     // already leading → no further cost
+        : st.curBid+MIN_BID;            // outbidding another team → +10
     if(team.purse<nb)return false;
-    if(team.id===st.curBidder)return false; // can't outbid yourself
+    if(team.id===st.curBidder)return false; // already leading, no need to rebid
     return true;
   },[st,curPlayer]);
 
@@ -1276,11 +1265,12 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                   const able=canBid(team),isLead=team.id===st.curBidder;
                   const skipped=hasSkipped(team.id);
                   // nb = price this team would pay if they bid now
+                  // Rule: first bid = base price | outbidding = +10 | leading = no change
                   const nb=st.curBidder===null
-                    ? curPlayer.basePrice       // first bid → base
+                    ? curPlayer.basePrice        // nobody bid yet → base price (100)
                     : isLead
-                      ? st.curBid              // already leading → same price
-                      : st.curBid+MIN_BID;     // outbidding → +5
+                      ? st.curBid               // already leading → same price shown
+                      : st.curBid+MIN_BID;      // different team outbidding → +10
                   return(
                     <div key={team.id} style={{display:"flex",flexDirection:"column",gap:4}}>
                       <button className="tbb" disabled={!able}
@@ -1418,12 +1408,15 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
 }){
   const isLeading=st.curBidder===myTeam.id;
   const pctLeft=(myTeam.purse/PURSE)*100;
-  // nextBid: only raises when THIS team is outbidding someone else
+  // nextBid: price this captain would pay if they bid now
+  // Rule: first bid on player = base price (no raise)
+  //       outbidding a different team = +10 pts
+  //       already leading = stays at current (can't rebid yourself)
   const nextBid=st.curBidder===null
-    ? curPlayer?.basePrice??0           // first bid → base price
+    ? curPlayer?.basePrice??0           // nobody bid yet → base price (100)
     : st.curBidder===myTeam.id
-      ? st.curBid                       // already leading — no further raise
-      : st.curBid+MIN_BID;              // outbidding → +5
+      ? st.curBid                       // already leading → no raise needed
+      : st.curBid+MIN_BID;              // outbidding another team → +10
   const squad=safeArr(myTeam.squad);
   const allTeams=safeArr(st.teams);
   const leadTeam=st.curBidder!==null?allTeams.find(t=>t.id===st.curBidder):undefined;
