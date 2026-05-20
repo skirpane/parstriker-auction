@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v10");
+const fbRef=()=>ref(getDb(),"psAuction_v12");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -69,8 +69,8 @@ interface LogItem{icon:string;text:string;time:string;}
 interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];rotatingPool?:number[];}
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const PURSE=500; const MIN_BID=5; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=10;
+const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
+const TOTAL_ROUNDS=3; const DATA_VERSION=12;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -107,51 +107,40 @@ const CAPTAIN_MAP:{[teamId:number]:number}={1:4, 2:8, 3:18};
 //  Bidding war: someone overpays 120 on Krunal → only 380 left for 6 → avg 63 → tight!
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  FLAT POINTS SYSTEM — Everyone starts at 100 pts base
+//
+//  PURSE    : 800 pts per team
+//  BASE BID : 100 pts (every player)
+//  INCREMENT: 10 pts per raise
+//  PICKS    : 7 marquee players per team
+//
+//  WHY THIS IS EXCITING:
+//  ┌─────────────────────────────────────────────────────────────────────────┐
+//  │  Every player is equally valuable at the start — no "cheap" options    │
+//  │  Bidding wars are real — overpay one player and you're 100 pts short   │
+//  │  Budget math per team:                                                  │
+//  │    7 players × 100 base = 700 pts (87.5% of budget)                   │
+//  │    100 pts buffer for bidding wars                                      │
+//  │    Overpay one player by 100 → only 700 left for 6 → avg 116 → TIGHT! │
+//  │    Two bidding wars (+50 each) → 800 pts → exact budget used up!       │
+//  └─────────────────────────────────────────────────────────────────────────┘
+//
+//  STRATEGY IMPLICATION:
+//  • You can afford to overpay just ONE player by max 100 pts
+//  • Every bidding war costs you a future player
+//  • Pass on players you don't need — save budget for the ones you want
+//  • Watch opponents' purse bar — if they're low, bid aggressively!
+// ══════════════════════════════════════════════════════════════════════════════
 const PLAYER_PRICES:Record<number,number>={
-  // ── TIER A: Captains (100 pts each) ──────────────────────────────────────
-  4:100,  // Ashish Nageet       Captain BI
-  8:100,  // Kannan Santharam    Captain RK
-  18:100, // Sandeep Kirpane     Captain WW
-
-  // ── TIER B: All-Rounders (65–85 pts) ─────────────────────────────────────
-  10:85,  // Krunal Shah
-  11:85,  // Ravinder Negi
-  6:75,   // Janesh Chohan
-  26:70,  // Vineet Shende
-  16:65,  // Rajat Mehrotra
-
-  // ── TIER D: Bowling All-Rounders (60–70 pts) ─────────────────────────────
-  1:70,   // Abdul Mubeen
-  21:65,  // Santosh Vaghmare
-  3:60,   // Aravind
-  19:60,  // Sanjay Prajapati
-  31:40,  // Saravanan Marimuthu
-  32:55,  // Saravanan Marimuthu
-
-  // ── TIER F: Batsmen / WK (40–60 pts) ─────────────────────────────────────
-  2:60,   // Amit Jadli
-  9:60,   // Karthik Vempati
-  7:55,   // Jitendra Mistry
-  27:55,  // Srini Vellingiri
-  25:55,  // Vicky
-  15:50,  // Pranay Raj
-  30:50,  // Vibhor
-  17:45,  // Sameer Saxena
-  12:45,  // Nikhil Surabhi
-  22:45,  // Savan Paka
-  13:40,  // Nikhil Shah
-  23:30,  // Sushil Page
-
-  // ── TIER G: Batsmen (25–45 pts) ───────────────────────────────────────────
-  28:25,  // Raghav Ambati
-  29:25,  // Karan Shah
-
-  // ── TIER H: Bowlers (25–40 pts) ──────────────────────────────────────────
-  14:40,  // Pradeep Patil
-  5:40,   // Hari Reddy
-  20:40,  // Sanket Rana
-  24:25,  // Tushar More
+  // All 31 players — flat 100 pts base each
+  // Captains (4, 8, 18) are pre-assigned — 100 pts reference only
+  1:100,2:100,3:100,4:100,5:100,6:100,7:100,8:100,9:100,10:100,
+  11:100,12:100,13:100,14:100,15:100,16:100,17:100,18:100,19:100,20:100,
+  21:100,22:100,23:100,24:100,25:100,26:100,27:100,28:100,29:100,30:100,
+  31:100,32:100,33:100,
 };
+
 
 const RAW_PLAYERS=[
   {id:1,  name:"Abdul Mubeen",        role:"Bowling All-Rounder",  img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
@@ -186,6 +175,7 @@ const RAW_PLAYERS=[
   {id:30, name:"Vibhor",              role:"Batsman / WK",         img:"VB",   chUrl:"https://cricheroes.com/player-profile/33203217/vibhor-k-(wk)/matches"},
   {id:31, name:"Saravanan Marimuthu", role:"Batsman",              img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
   {id:32, name:"Kayur",               role:"Bowling All-Rounders", img:"KAy",  chUrl:"https://cricheroes.com/player-profile/42050777/kayur-cric/matches"},
+  {id:33, name:"Pranav",              role:"Batsman",              img:"PRn",  chUrl:"https://cricheroes.com/player-profile/42341403/pranav/matches"},
 ];
 
 const roleTier=(r:string):string=>{
@@ -208,7 +198,7 @@ const buildInitPlayers=():Player[]=>{
 };
 
 const buildInitTeams=():Team[]=>{
-  const captainPrices:{[id:number]:number}={4:100,8:100,18:100}; // Tier A — 100 pts each
+  const captainPrices:{[id:number]:number}={4:100,8:100,18:100}; // pre-assigned at 100 pts
   const teamsBase=[
     {id:1,name:"Blue Indians",short:"BI",color:"#1a56db",accent:"#FFD700",captainPlayerId:4},
     {id:2,name:"Red Knights",short:"RK",color:"#c41e3a",accent:"#FFD700",captainPlayerId:8},
@@ -1231,7 +1221,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
             <div className="rbe">{st.aRound===0?"WELCOME TO":"ROUND "+st.aRound+" COMPLETE"}</div>
             <div className="rbt">{st.aRound===0?"PARSTRIKER AUCTION":`ROUND ${st.aRound+1} OF ${TOTAL_ROUNDS}`}</div>
             <div className="rbd">
-              {st.aRound===0?`${auctionPlayers.length} players · ${TOTAL_ROUNDS} rounds · ${teams.length} teams · ${fmt(PURSE)} budget each`
+              {st.aRound===0?`${auctionPlayers.length} players · All at ${fmt(100)} base · ${TOTAL_ROUNDS} rounds · ${fmt(PURSE)} budget each`
                 :`${auctionPlayers.filter(p=>p.soldTo===null).length} unsold players re-enter · Round ${st.aRound+1} of ${TOTAL_ROUNDS}`}
             </div>
             <button className="rbb" onClick={()=>onStartRound(st.aRound+1)}>{st.aRound===0?"⚡ START AUCTION":`▶ BEGIN ROUND ${st.aRound+1}`}</button>
