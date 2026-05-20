@@ -945,6 +945,982 @@ export default function App() {
       safeArr(t.squad).length<MAX_SQUAD && t.marqueeCount<MAX_MARQUEE
     );
 
+    // All squads full → done
+    if(teamsNeedMore.length===0){
+      const unsold=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id)).map(p=>p.id);
+      const log=addLog(snap,"🏆","All squads complete! Parstriker Auction done!");
+      await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:unsold});
+      return;
+    }
+
+    const next=snap.curIdx+1;
+
+    // More players in current queue → advance to next player
+    if(next<safeArr(snap.queue).length){
+      await update(ref(getDb(),"psAuction_v23"),{curIdx:next,curBid:0,curBidder:null,firstBidder:null,showSold:false,lastSold:null,skippedTeams:[]});
+      return;
+    }
+
+    // Queue exhausted — show "Start Next Round" button to admin
+    const unsoldPlayers=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
+
+    if(unsoldPlayers.length===0){
+      const log=addLog(snap,"🏆","All players assigned! Auction complete.");
+      await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:[]});
+      return;
+    }
+
+    // Go to roundDone — admin manually starts next round
+    const log=addLog(snap,"⏸️",`Round ${snap.aRound} complete. ${unsoldPlayers.length} unsold players waiting for Round ${snap.aRound+1}.`);
+    await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,phase:"roundDone",log,lastSold:null,skippedTeams:[]});
+  };
+ src/App.tsx
+import { useState, useEffect, useCallback, useRef } from "react";
+import { initializeApp, FirebaseApp } from "firebase/app";
+import { getDatabase, Database, ref, onValue, set, update, get } from "firebase/database";
+
+// ─── FIREBASE ─────────────────────────────────────────────────────────────────
+interface FBConfig { apiKey:string; authDomain:string; databaseURL:string; projectId:string; storageBucket:string; messagingSenderId:string; appId:string; }
+// ── Firebase fully pre-configured — no setup prompt shown to users ──────────
+const FULL_FB_CONFIG:FBConfig = {
+  apiKey:             "AIzaSyD3k2c_0oX3C3f1nAqDRYidKYNCGJgF7I4",
+  authDomain:         "parstriker-auction.firebaseapp.com",
+  databaseURL:        "https://parstriker-auction-default-rtdb.firebaseio.com",
+  projectId:          "parstriker-auction",
+  storageBucket:      "parstriker-auction.firebasestorage.app",
+  messagingSenderId:  "1400458016",
+  appId:              "1:1400458016:web:b19f0b8d854f5a9df02545",
+};
+const FB_STORE_KEY = "ps_fb_config_v5";
+const loadCfg=():FBConfig=>FULL_FB_CONFIG;
+const saveCfg=(_c:FBConfig)=>{};
+let _app:FirebaseApp|null=null,_db:Database|null=null;
+const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
+const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
+const fbRef=()=>ref(getDb(),"psAuction_v23");
+const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
+const safeParse=(raw:any):AuctionState=>{
+  // Firebase can return arrays as objects {0:x,1:y} — normalize everything
+  const toArr=(v:any)=>!v?[]:Array.isArray(v)?v:Object.values(v);
+  return{
+    ...raw,
+    queue:toArr(raw.queue),
+    log:toArr(raw.log),
+    skippedTeams:toArr(raw.skippedTeams),
+    rotatingPool:toArr(raw.rotatingPool),
+    firstBidder:raw.firstBidder??null,
+    teams:toArr(raw.teams).map((t:any)=>({...t,squad:toArr(t.squad)})),
+    players:toArr(raw.players),
+  };
+};
+const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?safeParse(s.val()):INIT_STATE;};
+const writeSt=async(s:AuctionState)=>set(fbRef(),s);
+const patchSt=async(p:Partial<AuctionState>)=>update(fbRef(),p);
+
+// ── SHA-256 hash via browser SubtleCrypto — passwords never stored plain ──
+const sha256=async(text:string):Promise<string>=>{
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+};
+
+// ── Write hashed passwords to Firebase (admin calls this once on first run) ─
+// Stored at /psAuth_v1 — separate from auction data, never in JS bundle
+const initAuth=async()=>{
+  const snap=await get(authRef());
+  if(snap.exists())return; // already set — don't overwrite
+  // These are the ONLY place passwords appear — hashed immediately, never stored plain
+  const [ah,bh,rkh,wwh]=await Promise.all([
+    sha256("Parstriker#0"),
+    sha256("BlueIndians#0"),
+    sha256("RedKnights#0"),
+    sha256("WhiteWolves#0"),
+  ]);
+  await set(authRef(),{admin:ah, bi:bh, rk:rkh, ww:wwh});
+};
+
+// ── Verify a password attempt against stored hash ──────────────────────────
+const verifyPass=async(attempt:string,role:"admin"|"bi"|"rk"|"ww"):Promise<boolean>=>{
+  try{
+    const snap=await get(authRef());
+    if(!snap.exists())return false;
+    const hashes=snap.val() as Record<string,string>;
+    const attemptHash=await sha256(attempt);
+    return hashes[role]===attemptHash;
+  }catch{return false;}
+};
+
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+type Role="login"|"admin"|"captain"|"viewer";
+type Phase="banner"|"running"|"done";
+interface Player{id:number;name:string;role:string;tier:string;country:string;img:string;basePrice:number;soldTo:number|null;soldPrice:number|null;round:number|null;isCaptain?:boolean;chUrl?:string;}
+interface SquadPlayer extends Player{soldPrice:number;isMarquee:boolean;round:number;isCaptain?:boolean;}
+interface Team{id:number;name:string;short:string;color:string;accent:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
+interface LogItem{icon:string;text:string;time:string;}
+interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:number|null;firstBidder:number|null;aRound:number;phase:Phase;showSold:boolean;aDone:boolean;log:LogItem[];teams:Team[];players:Player[];dataVersion:number;lastSold?:{playerName:string;teamName:string;teamColor:string;teamId:number;price:number;}|null;skippedTeams?:number[];rotatingPool?:number[];}
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
+const TOTAL_ROUNDS=3; const DATA_VERSION=23;
+const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
+const fmt=(v:number):string=>`${v} pts`;
+const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
+
+// ─── CAPTAIN PLAYER IDs ───────────────────────────────────────────────────────
+// ─── CAPTAINS: BI=Ashish(id:4), RK=Kannan(id:8), WW=Sandeep(id:18) ───────────
+const CAPTAIN_MAP:{[teamId:number]:number}={1:4, 2:8, 3:18};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PARSTRIKER AUCTION — POINT SYSTEM  (updated from final player list)
+//
+//  TEAM BUDGET : 500 pts each
+//  BID INCREMENT: 5 pts minimum
+//  SQUAD SIZE   : 8 players (1 captain pre-set + 7 auction picks)
+//  MARQUEE SLOTS: 7 per team (all auction picks count as marquee)
+//
+//  ┌─────────────────────────────────────────────────────────────────────────┐
+//  │  TIER  │  ROLE                  │  BASE PTS │  REASONING               │
+//  ├─────────────────────────────────────────────────────────────────────────┤
+//  │   A    │  All-Rounder (captain) │  100      │  Lead, bat+bowl elite    │
+//  │   B    │  All-Rounder           │  70–90    │  Both skills, versatile  │
+//  │   C    │  Batting All-Rounder   │  70–80    │  Bat primary, bowl handy │
+//  │   D    │  Bowling All-Rounder   │  60–70    │  Bowl primary, bat handy │
+//  │   E    │  Bowler All-Rounder    │  55–65    │  Bowling specialist + AR │
+//  │   F    │  Batsman / WK          │  45–55    │  Bat or keep specialist  │
+//  │   G    │  Batsman               │  35–50    │  Bat only specialist     │
+//  │   H    │  Bowler / Bowling      │  30–40    │  Bowl specialist         │
+//  └─────────────────────────────────────────────────────────────────────────┘
+//
+//  BUDGET MATH — each team picks 7 players from auction:
+//  Strategy A (2 Elite AR + 5 Batsmen)    : 90+85 + 5×45 = 400 pts ✓
+//  Strategy B (1 Elite + 3 AR + 3 Bat)   : 90+75+70+65 + 3×45 = 435 pts ✓
+//  Strategy C (All Rounders heavy x7)     : 90+85+75+70+65+60+55 = 500 pts ✓ (exact budget!)
+//  Bidding war: someone overpays 120 on Krunal → only 380 left for 6 → avg 63 → tight!
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FLAT POINTS SYSTEM — Everyone starts at 100 pts base
+//
+//  PURSE : 1100 pts  |  BASE : 100 pts  |  INCREMENT : 10 pts  |  PICKS : 7
+//
+//  BID RULE:
+//  • First bid on a player  → 100 pts (base, no increase)
+//  • Next team outbids      → +10 pts each time
+//  • Only one team bidding  → gets player at BASE 100 pts exactly
+//
+//  BUDGET MATH:
+//  7 players × 100 base = 700 pts used  |  400 pts buffer for bidding wars
+//  Win 4 bidding wars (+100 each)       → spend exactly 1100 pts (budget exhausted!)
+// ══════════════════════════════════════════════════════════════════════════════
+const PLAYER_PRICES:Record<number,number>={
+  // All 28 players — flat 100 pts base each
+  // Captains (4, 8, 18) pre-assigned — 100 pts reference only
+  1:100,2:100,3:100,4:100,5:100,6:100,7:100,8:100,9:100,10:100,
+  11:100,12:100,13:100,14:100,15:100,16:100,17:100,18:100,19:100,20:100,
+  21:100,22:100,23:100,24:100,25:100,26:100,27:100,28:100,
+};
+
+const RAW_PLAYERS=[
+  {id:1,  name:"Pranay Raj",          role:"Batsman",              img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
+  {id:2,  name:"Amit Jadli",          role:"Batsman / WK",         img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
+  {id:3,  name:"Aravind",             role:"Bowling All-Rounder",  img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
+  {id:4,  name:"Ashish Nageet",       role:"All-Rounder",          img:"AN",   chUrl:"https://cricheroes.com/player-profile/9793757/ashish-nageet/matches"},
+  {id:5,  name:"Hari Reddy",          role:"Bowler",               img:"HR",   chUrl:"https://cricheroes.com/player-profile/16012495/hari-reddy-m/matches"},
+  {id:6,  name:"Karan Shah",          role:"Batsman",              img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
+  {id:7,  name:"Jitendra Mistry",     role:"Batsman",              img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
+  {id:8,  name:"Kannan Santharam",    role:"Bowler",               img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
+  {id:9,  name:"Karthik Vempati",     role:"All-Rounder",          img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
+  {id:10, name:"Nikhil Surabhi",      role:"Batsman",              img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
+  {id:11, name:"Ravinder Negi",       role:"All-Rounder",          img:"RN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
+  {id:12, name:"Pradeep Patil",       role:"Bowler",               img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
+  {id:13, name:"Nikhil Shah",         role:"Batsman / WK",         img:"NSh",  chUrl:"https://cricheroes.com/player-profile/50005870/nikhil-shah/matches"},
+  {id:14, name:"Vicky",               role:"Batsman / WK",         img:"VS",   chUrl:"https://cricheroes.com/player-profile/29553277/vicky-sangavkar/matches"},
+  {id:15, name:"Srini Vellingiri",    role:"Batsman",              img:"SV2",  chUrl:"https://cricheroes.com/player-profile/23196220/srini/matches"},
+  {id:16, name:"Rajat Mehrotra",      role:"All-Rounder",          img:"RM",   chUrl:"https://cricheroes.com/player-profile/9755522/rajat-mehrotra/matches"},
+  {id:17, name:"Sameer Saxena",       role:"Batsman",              img:"SS",   chUrl:"https://cricheroes.com/player-profile/9670658/sameer-saxena/matches"},
+  {id:18, name:"Sandeep Kirpane",     role:"Batting All-Rounder",  img:"SK",   chUrl:"https://cricheroes.com/player-profile/22946234/sandeep-kirpane/matches"},
+  {id:19, name:"Sanjay Prajapati",    role:"Bowling All-Rounder",  img:"SP",   chUrl:"https://cricheroes.com/player-profile/29553754/sanjay-prajapati/matches"},
+  {id:20, name:"Raghav Ambati",       role:"Batsman",              img:"RA",   chUrl:"https://cricheroes.com/player-profile/50005907/raghav-ambati/matches"},
+  {id:21, name:"Santosh Vaghmare",    role:"Bowling All-Rounder",  img:"SV",   chUrl:"https://cricheroes.com/player-profile/15997501/santosh-waghmare/matches"},
+  {id:22, name:"Savan Paka",          role:"Batsman",              img:"SPa",  chUrl:"https://cricheroes.com/player-profile/7984823/savan/matches"},
+  {id:23, name:"Kayur",               role:"Bowling All-Rounder",  img:"KAy",  chUrl:"https://cricheroes.com/player-profile/42050777/kayur-cric/matches"},
+  {id:24, name:"Tushar More",         role:"Bowler",               img:"TM",   chUrl:"https://cricheroes.com/player-profile/23108798/tushar-more/matches"},
+  {id:25, name:"Saravanan Marimuthu", role:"Batsman",              img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
+  {id:26, name:"Janesh Chohan",       role:"All-Rounder",          img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
+  {id:27, name:"Abdul Mubeen",        role:"Bowling All-Rounder",  img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
+  {id:28, name:"Krunal Shah",         role:"All-Rounder",          img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
+];
+
+const roleTier=(r:string):string=>{
+  if(r==="All-Rounder")               return "Elite";
+  if(r==="Batting All-Rounder")       return "Elite";
+  if(r.includes("Bowling All-Round")) return "Premium";
+  if(r.includes("Bowler All-Round"))  return "Premium";
+  if(r.includes("WK"))                return "Keeper";
+  if(r==="Batsman")                   return "Batsman";
+  return "Bowler";
+};
+
+// Pre-assign captains to their teams (not in auction pool)
+const buildInitPlayers=():Player[]=>{
+  return RAW_PLAYERS.map(p=>({
+    ...p,tier:roleTier(p.role),country:"IND",
+    basePrice:PLAYER_PRICES[p.id]??40,
+    soldTo:null,soldPrice:null,round:null,isCaptain:false,chUrl:p.chUrl??"",
+  }));
+};
+
+const buildInitTeams=():Team[]=>{
+  const captainPrices:{[id:number]:number}={4:100,8:100,18:100}; // pre-assigned at 100 pts
+  const teamsBase=[
+    {id:1,name:"Blue Indians",short:"BI",color:"#1a56db",accent:"#FFD700",captainPlayerId:4},
+    {id:2,name:"Red Knights",short:"RK",color:"#c41e3a",accent:"#FFD700",captainPlayerId:8},
+    {id:3,name:"White Wolves",short:"WW",color:"#b0b8c8",accent:"#FFD700",captainPlayerId:18},
+  ];
+  return teamsBase.map(t=>{
+    const capPlayer=RAW_PLAYERS.find(p=>p.id===t.captainPlayerId)!;
+    const capSP:SquadPlayer={
+      id:capPlayer.id,name:capPlayer.name,role:capPlayer.role,img:capPlayer.img,
+      tier:roleTier(capPlayer.role),country:"IND",
+      basePrice:captainPrices[capPlayer.id],
+      soldTo:t.id,soldPrice:0,round:0,
+      isMarquee:true,isCaptain:true,
+    };
+    return{...t,purse:PURSE,squad:[capSP],marqueeCount:0}; // captain not counted — 7 full auction slots open
+  });
+};
+
+const INIT_PLAYERS=buildInitPlayers();
+const INIT_TEAMS=buildInitTeams();
+const INIT_STATE:AuctionState={
+  queue:[],curIdx:0,curBid:0,curBidder:null,
+  aRound:0,phase:"banner",showSold:false,aDone:false,
+  log:[],teams:INIT_TEAMS,players:INIT_PLAYERS,dataVersion:DATA_VERSION,lastSold:null,skippedTeams:[],rotatingPool:[],firstBidder:null,
+};
+
+// ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
+
+// Main Parstriker logo — cricket bat + ball wordmark style
+const LogoParstriker=({size=48}:{size?:number})=>(
+  <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Outer ring */}
+    <circle cx="60" cy="60" r="57" fill="#05050e" stroke="url(#psGold)" strokeWidth="3"/>
+    <defs>
+      <linearGradient id="psGold" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#FFD700"/>
+        <stop offset="100%" stopColor="#00e5ff"/>
+      </linearGradient>
+      <linearGradient id="psBat" x1="30" y1="90" x2="90" y2="30" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#e8d5a0"/>
+        <stop offset="100%" stopColor="#fff8e0"/>
+      </linearGradient>
+    </defs>
+    {/* Cricket bat — diagonal, clean */}
+    <rect x="30" y="55" width="14" height="52" rx="7" fill="url(#psBat)" transform="rotate(-45 60 60)"/>
+    {/* Bat grip */}
+    <rect x="78" y="20" width="6" height="18" rx="3" fill="#c41e3a" transform="rotate(-45 60 60)"/>
+    {/* Ball */}
+    <circle cx="38" cy="78" r="11" fill="#c41e3a"/>
+    <path d="M31 75 Q38 70 45 75" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+    <path d="M31 81 Q38 86 45 81" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+    {/* Stars top */}
+    <text x="60" y="24" textAnchor="middle" fill="#FFD700" fontSize="10" fontFamily="Arial">★ ★ ★</text>
+    {/* PS initials */}
+    <text x="78" y="88" textAnchor="middle" fill="url(#psGold)" fontSize="22" fontFamily="'Bebas Neue',Arial" fontWeight="bold" letterSpacing="2">PS</text>
+  </svg>
+);
+
+// Blue Indians — bold "BI" on blue shield
+const LogoBI=({size=48}:{size?:number})=>(
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="biGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#1a56db"/>
+        <stop offset="100%" stopColor="#0a2a80"/>
+      </linearGradient>
+    </defs>
+    {/* Shield shape */}
+    <path d="M50 6 L88 22 L88 54 Q88 78 50 94 Q12 78 12 54 L12 22 Z" fill="url(#biGrad)" stroke="#FFD700" strokeWidth="2.5"/>
+    {/* Gold band */}
+    <path d="M12 36 L88 36" stroke="#FFD700" strokeWidth="2" opacity="0.6"/>
+    {/* Bold BI text */}
+    <text x="50" y="72" textAnchor="middle" fill="#FFD700" fontSize="30" fontFamily="'Bebas Neue',Arial" fontWeight="900" letterSpacing="2">BI</text>
+    {/* Top accent */}
+    <text x="50" y="31" textAnchor="middle" fill="#ffffff" fontSize="9" fontFamily="Arial" opacity="0.7" letterSpacing="1">BLUE INDIANS</text>
+  </svg>
+);
+
+// Red Knights — bold "RK" on red shield
+const LogoRK=({size=48}:{size?:number})=>(
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="rkGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#c41e3a"/>
+        <stop offset="100%" stopColor="#7a0010"/>
+      </linearGradient>
+    </defs>
+    {/* Shield shape */}
+    <path d="M50 6 L88 22 L88 54 Q88 78 50 94 Q12 78 12 54 L12 22 Z" fill="url(#rkGrad)" stroke="#FFD700" strokeWidth="2.5"/>
+    {/* Gold band */}
+    <path d="M12 36 L88 36" stroke="#FFD700" strokeWidth="2" opacity="0.6"/>
+    {/* Bold RK text */}
+    <text x="50" y="72" textAnchor="middle" fill="#FFD700" fontSize="30" fontFamily="'Bebas Neue',Arial" fontWeight="900" letterSpacing="2">RK</text>
+    {/* Top accent */}
+    <text x="50" y="31" textAnchor="middle" fill="#ffffff" fontSize="9" fontFamily="Arial" opacity="0.7" letterSpacing="1">RED KNIGHTS</text>
+  </svg>
+);
+
+// White Wolves — bold "WW" on dark shield
+const LogoWW=({size=48}:{size?:number})=>(
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="wwGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#4a5568"/>
+        <stop offset="100%" stopColor="#1a202c"/>
+      </linearGradient>
+    </defs>
+    {/* Shield shape */}
+    <path d="M50 6 L88 22 L88 54 Q88 78 50 94 Q12 78 12 54 L12 22 Z" fill="url(#wwGrad)" stroke="#b0b8c8" strokeWidth="2.5"/>
+    {/* Silver band */}
+    <path d="M12 36 L88 36" stroke="#b0b8c8" strokeWidth="2" opacity="0.6"/>
+    {/* Bold WW text */}
+    <text x="50" y="72" textAnchor="middle" fill="#e0e8f0" fontSize="28" fontFamily="'Bebas Neue',Arial" fontWeight="900" letterSpacing="1">WW</text>
+    {/* Top accent */}
+    <text x="50" y="31" textAnchor="middle" fill="#ffffff" fontSize="9" fontFamily="Arial" opacity="0.7" letterSpacing="1">WHITE WOLVES</text>
+  </svg>
+);
+
+const LOGOS:Record<number,(p:{size?:number})=>JSX.Element>={1:LogoBI,2:LogoRK,3:LogoWW};
+const TeamLogo=({teamId,size=40}:{teamId:number;size?:number})=>{const L=LOGOS[teamId];return L?<L size={size}/>:<div style={{width:size,height:size,borderRadius:"50%",background:"#333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size/3,color:"#fff"}}>?</div>;};
+
+// ─── CSS ──────────────────────────────────────────────────────────────────────
+const CSS=`
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@500;700&family=DM+Sans:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#13111e;       /* Deep purple-black like Pixelait */
+  --s1:#1e1a2e;       /* Purple-dark card */
+  --s2:#221e32;       /* Slightly lighter purple */
+  --s3:#2a2440;       /* Card hover */
+  --bd:#3d3560;       /* Purple border */
+  --gold:#a78bfa;     /* Soft violet-purple accent (main) */
+  --cyan:#818cf8;     /* Indigo accent */
+  --green:#34d399;
+  --txt:#f1f0ff;      /* Near-white with slight purple tint */
+  --mut:#8b82b0;      /* Muted purple-grey */
+  --ok:#34d399;
+  --ng:#f87171;
+  --warn:#fb923c;
+  --purple:#7c3aed;   /* Rich purple for highlights */
+  --indigo:#4f46e5;   /* Deep indigo */
+  --violet:#8b5cf6;   /* Medium violet */
+}
+body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;overflow-y:auto;-webkit-font-smoothing:antialiased;}
+
+/* SETUP */
+.sw{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:linear-gradient(135deg,#1a1528 0%,#13111e 50%,#16122a 100%);}
+.sb2{background:linear-gradient(145deg,#221e32,#1a1528);border:1px solid rgba(139,92,246,.3);border-radius:20px;padding:32px 28px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.slogo{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:6px}
+.slt{font-family:'Bebas Neue';font-size:32px;letter-spacing:4px;background:linear-gradient(90deg,#FFD700,#00e5ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.ssub{font-family:'Bebas Neue';font-size:13px;letter-spacing:4px;color:var(--mut);text-align:center;margin-bottom:20px}
+.sdesc{font-size:11px;color:var(--mut);line-height:1.7;margin-bottom:18px;background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.12);border-radius:10px;padding:12px 14px}
+.sdesc b{color:var(--cyan)}
+.spre{background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.12);border-radius:12px;padding:14px 16px;margin-bottom:18px}
+.spret{font-size:9px;color:var(--cyan);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px}
+.sprer{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.sprel{font-size:10px;color:var(--mut)}
+.sprev{font-size:10px;color:var(--txt);font-family:monospace;background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px}
+.sfield{margin-bottom:10px}
+.slbl{font-size:9px;color:var(--cyan);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;display:block}
+.sinp{width:100%;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:11px 12px;color:var(--txt);font-size:15px;outline:none;transition:all .2s;text-align:center;letter-spacing:2px}
+.sinp:focus{border-color:var(--cyan);box-shadow:0 0 10px rgba(0,229,255,.15)}
+.serr{background:rgba(255,51,85,.12);border:1px solid rgba(255,51,85,.4);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--ng);margin-bottom:10px}
+.sbtn{width:100%;margin-top:14px;padding:14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:11px;color:#000;font-family:'Bebas Neue';font-size:19px;letter-spacing:3px;cursor:pointer;transition:all .25s;font-weight:900}
+.sbtn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,215,0,.3)}
+
+/* CONNECTING */
+.conn{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--bg)}
+.spin{width:44px;height:44px;border:3px solid rgba(0,229,255,.15);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* HEADER */
+.hdr{background:linear-gradient(90deg,#0e0c1a,#1a1528,#0e0c1a);border-bottom:1px solid rgba(124,58,237,.3);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;backdrop-filter:blur(20px);box-shadow:0 2px 20px rgba(0,0,0,.3)}
+.hlw{display:flex;align-items:center;gap:10px}
+.hl{font-family:'Bebas Neue';font-size:20px;letter-spacing:3px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1}
+.hl-sub{font-size:9px;color:var(--mut);letter-spacing:2px;font-family:'Rajdhani'}
+.hr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.rp{padding:3px 11px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border:1px solid}
+.xb{background:transparent;border:1px solid var(--bd);color:var(--mut);padding:5px 12px;border-radius:7px;cursor:pointer;font-size:11px;transition:all .2s}
+.xb:hover{border-color:var(--ng);color:var(--ng)}
+.nb{background:transparent;border:1px solid var(--ng);color:var(--ng);padding:5px 12px;border-radius:7px;cursor:pointer;font-size:11px}
+
+/* NAV */
+.nav{background:rgba(19,17,30,.9);border-bottom:1px solid var(--bd);padding:0 18px;display:flex;gap:2px;overflow-x:auto;overflow-y:hidden;backdrop-filter:blur(10px);scrollbar-width:none;-ms-overflow-style:none}.nav::-webkit-scrollbar{display:none}
+.nt{background:transparent;border:none;color:var(--mut);padding:12px 14px;cursor:pointer;font-family:'Rajdhani';font-weight:700;font-size:12px;letter-spacing:1px;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+.nt:hover{color:var(--txt)} .nt.on{color:var(--gold);border-bottom-color:var(--gold)}
+
+/* LOGIN */
+.lw{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:16px;overflow-y:auto;
+  background:linear-gradient(160deg,#0e0c1a 0%,#13111e 40%,#1a1528 70%,#0e0c1a 100%)}
+.lhero{display:flex;flex-direction:column;align-items:center;margin-bottom:20px;gap:0}
+.lhero-headline{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
+.lhero-parsippany{font-family:'Bebas Neue';font-size:48px;letter-spacing:6px;line-height:1;
+  background:linear-gradient(90deg,#a78bfa,#818cf8,#38bdf8);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.lhero-sep{font-family:'Bebas Neue';font-size:48px;letter-spacing:0;line-height:1;
+  color:rgba(167,139,250,.3);margin:0 -4px}
+.lhero-title{font-family:'Bebas Neue';font-size:48px;letter-spacing:6px;line-height:1;
+  background:linear-gradient(90deg,#818cf8,#38bdf8,#a78bfa);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.lhero-tag{font-size:10px;color:var(--mut);letter-spacing:3px;margin-bottom:20px}
+.lhero-teams{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:24px;
+  padding:14px 28px;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.2);
+  border-radius:16px;flex-wrap:wrap}
+.lhero-team{display:flex;flex-direction:column;align-items:center;gap:4px}
+.lhero-team-name{font-family:'Bebas Neue';font-size:10px;letter-spacing:2px;text-align:center}
+.lb{background:linear-gradient(145deg,#221e32,#1a1528);border:1px solid rgba(124,58,237,.25);border-radius:22px;padding:24px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.ls{color:var(--mut);font-size:12px;margin-bottom:16px;text-align:center}
+.rg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
+.rb{background:rgba(139,92,246,.06);border:1px solid var(--bd);border-radius:12px;padding:14px 8px;cursor:pointer;transition:all .2s;color:var(--txt);text-align:center}
+.rb:hover{border-color:rgba(139,92,246,.5);background:rgba(139,92,246,.1)}
+.rb.sel{border-color:var(--violet);background:rgba(139,92,246,.15);box-shadow:0 0 14px rgba(139,92,246,.25)}
+.ri{font-size:22px;margin-bottom:5px} .rn{font-family:'Rajdhani';font-weight:700;font-size:13px;letter-spacing:1px;color:var(--gold)} .rh{font-size:9px;color:var(--mut);margin-top:2px}
+.inp{width:100%;background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.3);border-radius:9px;padding:11px 14px;color:var(--txt);font-size:13px;outline:none;transition:all .2s;margin-bottom:10px}
+.inp:focus{border-color:var(--violet);box-shadow:0 0 12px rgba(139,92,246,.25)}
+.gb{width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:11px;color:#000;font-family:'Bebas Neue';font-size:19px;letter-spacing:3px;cursor:pointer;transition:all .2s;font-weight:900}
+.gb:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(124,58,237,.4)} .gb:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.em{color:var(--ng);font-size:11px;margin-bottom:8px;background:rgba(255,51,85,.1);border:1px solid rgba(255,51,85,.3);border-radius:7px;padding:7px 10px}
+.ht{margin-top:12px;font-size:10px;color:var(--mut);line-height:1.8;text-align:center}
+
+/* ROUND BANNER */
+.rbn{text-align:center;padding:36px 24px;max-width:580px;margin:0 auto;width:100%;box-sizing:border-box}
+.rbe{font-family:'Rajdhani';font-size:11px;letter-spacing:4px;color:var(--mut);text-transform:uppercase;margin-bottom:8px}
+.rbt{font-family:'Bebas Neue';font-size:52px;letter-spacing:5px;margin-bottom:10px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.rbd{color:var(--mut);font-size:13px;margin-bottom:24px;line-height:1.7}
+.rbb{padding:14px 40px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:12px;color:#000;font-family:'Bebas Neue';font-size:21px;letter-spacing:3px;cursor:pointer;transition:all .25s;font-weight:900}
+.rbb:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(124,58,237,.5)}
+
+/* AUCTION LAYOUT */
+.al{display:grid;grid-template-columns:1fr 300px;min-height:0}
+.stg{padding:18px;overflow-y:auto;overflow-x:hidden;background:linear-gradient(180deg,#17132a 0%,#13111e 100%)}
+.st{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.rpill{padding:4px 12px;border-radius:20px;font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:1px;background:rgba(255,215,0,.1);color:var(--gold);border:1px solid rgba(255,215,0,.3)}
+.pb{background:rgba(255,255,255,.08);border-radius:4px;height:4px;width:140px;margin-top:4px}
+.pf{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--gold),var(--cyan));transition:width .5s}
+.spl{background:linear-gradient(145deg,rgba(34,30,50,.95),rgba(26,22,42,.95));border:1px solid rgba(124,58,237,.25);border-radius:20px;padding:24px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3);width:100%;box-sizing:border-box}
+.spl::before{content:'';position:absolute;top:-40%;left:-20%;width:140%;height:140%;background:radial-gradient(ellipse,rgba(255,215,0,.04),transparent 55%);pointer-events:none}
+.tt{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border-radius:20px;padding:4px 12px;margin-bottom:12px;font-size:10px;font-weight:700;letter-spacing:1.5px;border:1px solid}
+.pav{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:18px;margin:0 auto 10px;border:3px solid}
+.pn{font-family:'Bebas Neue';font-size:32px;letter-spacing:3px;line-height:1;margin-bottom:8px}
+.pm{display:flex;justify-content:center;gap:6px;margin-bottom:12px;flex-wrap:wrap;width:100%}
+.ch{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:3px 10px;font-size:11px;color:var(--txt)}
+.bb{background:rgba(14,12,26,.8);border:1px solid rgba(139,92,246,.2);border-radius:12px;padding:14px;margin-bottom:14px}
+.bl{font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2px}
+.ba{font-family:'Bebas Neue';font-size:44px;letter-spacing:2px;line-height:1;background:linear-gradient(90deg,var(--gold),#ff9900);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.bs{font-size:11px;color:var(--mut);margin-top:2px}
+.bldr{font-family:'Rajdhani';font-size:13px;font-weight:700;margin-top:5px}
+.bg{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px;width:100%}
+.tbb{padding:10px 7px;border-radius:10px;border:2px solid;cursor:pointer;font-family:'Rajdhani';font-weight:700;font-size:11px;transition:all .2s;text-align:left}
+.tbb:disabled{opacity:.25;cursor:not-allowed} .tbb:not(:disabled):hover{transform:translateY(-2px)}
+.tdg{font-family:'Bebas Neue';font-size:11px;letter-spacing:1.5px;padding:2px 5px;border-radius:3px}
+.ar{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.sdb{background:linear-gradient(135deg,#34d399,#059669);border:none;border-radius:10px;color:#000;padding:12px;font-family:'Bebas Neue';font-size:18px;letter-spacing:2px;cursor:pointer;transition:all .2s;font-weight:900}
+.sdb:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,255,136,.3)} .sdb:disabled{opacity:.35;cursor:not-allowed}
+.usb{background:transparent;border:2px solid var(--bd);border-radius:10px;color:var(--mut);padding:12px;font-family:'Bebas Neue';font-size:18px;letter-spacing:2px;cursor:pointer;transition:all .2s}
+.usb:hover:not(:disabled){border-color:var(--ng);color:var(--ng)} .usb:disabled{opacity:.35;cursor:not-allowed}
+
+/* SOLD OVERLAY */
+.so{position:absolute;inset:0;background:rgba(12,10,22,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:20px;z-index:10;animation:fi .3s ease;backdrop-filter:blur(4px)}
+.sot{font-family:'Bebas Neue';font-size:62px;letter-spacing:8px;color:var(--ok);animation:zi .4s ease;text-shadow:0 0 30px rgba(0,255,136,.5)}
+.soto{font-size:14px;color:var(--mut);margin-top:3px}
+.sop{font-family:'Bebas Neue';font-size:28px;background:linear-gradient(90deg,var(--gold),#ff9900);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+@keyframes zi{from{transform:scale(.3) rotate(-5deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+
+/* SIDEBAR */
+.sb{background:rgba(17,14,28,.9);border-left:1px solid var(--bd);overflow-y:auto;max-height:calc(100vh - 65px);backdrop-filter:blur(10px)}
+.ss{padding:12px;border-bottom:1px solid rgba(56,189,248,.1)}
+.sbt{font-family:'Rajdhani';font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--mut);margin-bottom:10px}
+.tc{background:rgba(34,30,50,.6);border-radius:9px;padding:10px;margin-bottom:6px;border:1px solid rgba(124,58,237,.15);transition:all .2s}
+.tc.lead{border-color:var(--violet);box-shadow:0 0 12px rgba(139,92,246,.25)}
+.tr{display:flex;justify-content:space-between;align-items:center}
+.pbo{background:rgba(56,189,248,.1);border-radius:3px;height:3px;margin-top:5px}
+.pbi{height:100%;border-radius:3px;transition:width .5s}
+.sc{font-size:9px;color:var(--mut);margin-top:4px}
+.ls{max-height:180px;overflow-y:auto}
+.lr{display:flex;gap:7px;padding:5px 0;border-bottom:1px solid rgba(56,189,248,.06)}
+.li{font-size:11px;flex-shrink:0;margin-top:1px} .lt{font-size:10px;line-height:1.4;flex:1} .ltime{font-size:8px;color:var(--mut)}
+
+/* ─── CAPTAIN DASHBOARD ─── */
+.cap-layout{display:grid;grid-template-columns:1fr 280px;min-height:0;overflow:visible}
+.cap-main{padding:16px;overflow-y:auto;overflow-x:hidden;background:linear-gradient(180deg,#17132a 0%,#13111e 100%)}
+.cap-side{background:rgba(17,14,28,.9);border-left:1px solid var(--bd);overflow-y:auto;max-height:calc(100vh - 65px);backdrop-filter:blur(10px)}
+
+/* Captain purse strip */
+.cap-pts-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px;width:100%}
+.cap-stat{background:linear-gradient(145deg,#221e32,#1a1528);border:1px solid rgba(124,58,237,.2);border-radius:11px;padding:12px;text-align:center;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.cap-stat.glow-gold{border-color:rgba(167,139,250,.6);box-shadow:0 0 16px rgba(139,92,246,.2)}
+.cap-stat.glow-red{border-color:rgba(255,51,85,.5);box-shadow:0 0 16px rgba(255,51,85,.2)}
+.csv{font-family:'Bebas Neue';font-size:24px;letter-spacing:1px}
+.csl{font-size:8px;color:var(--mut);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+
+/* Bidding stage for captain */
+.bid-stage{background:linear-gradient(145deg,#221e32,#1a1528);border:2px solid rgba(124,58,237,.2);border-radius:18px;padding:20px;text-align:center;transition:all .3s;margin-bottom:16px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.bid-stage.hot{border-color:rgba(139,92,246,.7);box-shadow:0 0 30px rgba(124,58,237,.2),inset 0 0 30px rgba(124,58,237,.04);animation:stagePulse 2s infinite}
+@keyframes stagePulse{0%,100%{box-shadow:0 0 30px rgba(124,58,237,.2)}50%{box-shadow:0 0 50px rgba(124,58,237,.35)}}
+.bid-stage.leading{border-color:rgba(52,211,153,.6);box-shadow:0 0 30px rgba(52,211,153,.2)}
+.nm{color:var(--mut);font-size:13px;padding:44px 0}
+
+/* Big bid display */
+.cur-bid-display{background:rgba(0,0,0,.5);border-radius:14px;padding:16px;margin:12px 0}
+.cbd-label{font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:2px;margin-bottom:4px}
+.cbd-amount{font-family:'Bebas Neue';font-size:52px;line-height:1;background:linear-gradient(90deg,var(--gold),#ff9900);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.cbd-amount.leading-amount{background:linear-gradient(90deg,var(--ok),#00cc66);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.cbd-leader{font-family:'Rajdhani';font-size:14px;font-weight:700;margin-top:6px;padding:5px 14px;border-radius:20px;display:inline-block}
+
+.cbb{width:100%;margin-top:14px;padding:18px;border:none;border-radius:13px;color:#fff;font-family:'Bebas Neue';font-size:24px;letter-spacing:4px;cursor:pointer;transition:all .25s;font-weight:900;position:relative;overflow:hidden}
+.cbb:hover:not(:disabled){transform:translateY(-3px)}
+.cbb:disabled{opacity:.32;cursor:not-allowed}
+/* cbb::after removed */
+
+/* Captain side panel */
+.cap-side-sec{padding:12px;border-bottom:1px solid rgba(56,189,248,.1)}
+.cap-side-title{font-family:'Rajdhani';font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--mut);margin-bottom:10px}
+.cap-squad-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(56,189,248,.08)}
+.cap-squad-item:last-child{border-bottom:none}
+.cap-sq-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:8px;border:1.5px solid;flex-shrink:0}
+.cap-sq-info{flex:1}
+.cap-sq-name{font-size:11px;font-weight:700;line-height:1.2;color:#ffffff}
+.cap-sq-role{font-size:9px;color:var(--mut)}
+.cap-sq-price{font-family:'Rajdhani';font-weight:700;font-size:11px;color:var(--gold)}
+
+/* PLAYER POOL */
+.pgw{padding:14px;max-width:1000px;margin:0 auto;width:100%;box-sizing:border-box}
+.fr{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.fb{background:rgba(255,255,255,.04);border:1px solid var(--bd);color:var(--mut);padding:4px 11px;border-radius:14px;cursor:pointer;font-size:11px;transition:all .2s}
+.fb.on,.fb:hover{border-color:var(--gold);color:var(--gold);background:rgba(255,215,0,.06)}
+.pgg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;width:100%}
+.pc{background:linear-gradient(145deg,#221e32,#1a1528);border:1px solid rgba(124,58,237,.15);border-radius:11px;padding:12px;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.pc:hover{border-color:rgba(139,92,246,.4);transform:translateY(-2px);box-shadow:0 6px 18px rgba(124,58,237,.15)} .pc.sp{opacity:.5}
+.pcav{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:10px;border:2px solid;margin-bottom:7px}
+.pcn{font-family:'Rajdhani';font-weight:700;font-size:13px;margin-bottom:2px;line-height:1.2;color:#ffffff;letter-spacing:.3px}
+.pcr{font-size:9px;color:var(--mut);margin-bottom:5px;line-height:1.3}
+.pctb{font-size:8px;padding:2px 6px;border-radius:7px;background:rgba(255,255,255,.06);display:inline-block}
+.pcs{font-size:9px;color:var(--ok);font-weight:700;margin-top:4px} .pcb{font-size:9px;color:var(--mut);margin-top:3px}
+.ch-link{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:8px;padding:7px 0;background:rgba(124,58,237,.1);border:1px solid rgba(139,92,246,.3);border-radius:8px;color:#a78bfa;font-size:10px;font-weight:700;cursor:pointer;text-decoration:none;transition:all .2s;letter-spacing:.5px;min-height:32px}
+.ch-link:hover{background:rgba(124,58,237,.22);border-color:#a78bfa;transform:translateY(-1px);color:#c4b5fd}
+
+/* TEAM CARDS */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:14px;padding:16px;max-width:960px;margin:0 auto;width:100%}
+.tfc{border-radius:14px;overflow:hidden;border:1px solid rgba(124,58,237,.15);background:linear-gradient(145deg,#221e32,#1a1528);transition:all .3s;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+.tfc:hover{transform:translateY(-3px)}
+.tfh{padding:14px 16px;display:flex;align-items:center;gap:12px;position:relative;overflow:hidden}
+.tfn{font-family:'Bebas Neue';font-size:17px;letter-spacing:2px;flex:1}
+.tfs{display:flex;gap:6px;padding:0 14px 12px}
+.tv{background:rgba(20,17,35,.7);border:1px solid rgba(124,58,237,.15);border-radius:7px;padding:7px 9px;flex:1;text-align:center}
+.tvv{font-family:'Rajdhani';font-weight:700;font-size:15px} .tvl{font-size:8px;color:var(--mut);text-transform:uppercase;letter-spacing:1px}
+.tfl{padding:0 14px 14px}
+.tpr{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid rgba(56,189,248,.07)}
+.tpr:last-child{border-bottom:none}
+.tpa{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;border:1.5px solid;flex-shrink:0}
+.tpi{flex:1} .tpn{font-size:11px;font-weight:700;color:#ffffff} .tps{font-size:9px;color:var(--mut)}
+.tpp{font-family:'Rajdhani';font-weight:700;font-size:10px;color:var(--gold)}
+.mq{font-size:7px;background:var(--gold);color:#000;padding:1px 3px;border-radius:2px;font-weight:700;margin-left:3px}
+.cap-tag{font-size:7px;background:var(--cyan);color:#000;padding:1px 4px;border-radius:2px;font-weight:700;margin-left:3px;letter-spacing:.5px}
+
+/* VIEWER */
+.vtk{padding:8px 16px;display:flex;align-items:center;gap:9px;overflow:hidden;background:rgba(17,14,28,.9);border-bottom:1px solid rgba(124,58,237,.25)}
+.vld{background:var(--ng);color:#fff;font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:1px;animation:pulse 1.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.vtxt{font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ─── POPUP OVERLAYS ─── */
+.overlay-backdrop{position:fixed;inset:0;background:rgba(8,6,18,.92);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fi .3s ease;backdrop-filter:blur(12px)}
+
+/* Viewer sold popup */
+.viewer-sold-popup{background:linear-gradient(145deg,#221e32,#13111e);border:2px solid;border-radius:22px;padding:24px 20px;text-align:center;max-width:360px;width:calc(100% - 32px);position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
+@keyframes popIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.vsp-player{font-family:'Bebas Neue';font-size:36px;letter-spacing:3px;margin:12px 0 6px;line-height:1}
+.vsp-role{font-size:12px;color:var(--mut);margin-bottom:16px}
+.vsp-selected{font-family:'Bebas Neue';font-size:16px;letter-spacing:3px;color:var(--mut);margin-bottom:8px}
+.vsp-team{font-family:'Bebas Neue';font-size:28px;letter-spacing:3px;margin-bottom:6px}
+.vsp-close{margin-top:20px;padding:10px 28px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:var(--txt);font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;cursor:pointer}
+
+/* Captain celebration popup */
+.cap-celeb-popup{background:linear-gradient(145deg,#0d2818,#17132a);border:2px solid var(--ok);border-radius:24px;padding:28px 22px;text-align:center;max-width:420px;width:calc(100% - 32px);position:relative;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 50px rgba(52,211,153,.25);overflow:hidden;max-height:90vh;overflow-y:auto}
+.celeb-rain{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;overflow:hidden}
+.celeb-emoji{position:absolute;font-size:22px;animation:emojiRain linear infinite;opacity:0}
+@keyframes emojiRain{0%{transform:translateY(-30px) rotate(0deg);opacity:1}100%{transform:translateY(500px) rotate(360deg);opacity:0}}
+.confetti{font-size:28px;animation:confettiFall 1s ease-out infinite alternate}
+@keyframes confettiFall{from{transform:translateY(0) rotate(0deg)}to{transform:translateY(-8px) rotate(20deg)}}
+.celeb-title{font-family:'Bebas Neue';font-size:42px;letter-spacing:4px;color:var(--ok);margin:10px 0 4px;text-shadow:0 0 30px rgba(52,211,153,.6)}
+.celeb-player{font-family:'Bebas Neue';font-size:30px;letter-spacing:2px;margin:8px 0;line-height:1}
+.celeb-price{font-family:'Bebas Neue';font-size:22px;letter-spacing:2px;color:var(--gold);margin:4px 0}
+.celeb-purse{font-size:12px;color:var(--mut);margin-top:8px}
+.celeb-close{margin-top:20px;padding:11px 32px;background:linear-gradient(135deg,var(--ok),#00cc66);border:none;border-radius:11px;color:#000;font-family:'Bebas Neue';font-size:18px;letter-spacing:2px;cursor:pointer;font-weight:900}
+
+/* DONE */
+.done{text-align:center;padding:40px 20px}
+.dtr{font-size:66px;animation:bou 1s infinite alternate}
+@keyframes bou{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+.dtl{font-family:'Bebas Neue';font-size:44px;letter-spacing:5px;margin:12px 0 6px;background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+/* FOOTER */
+.ps-footer{text-align:center;padding:18px 16px;border-top:1px solid rgba(124,58,237,.15);background:linear-gradient(0deg,rgba(20,17,35,.5),transparent);margin-top:8px}
+.ps-footer-txt{font-family:'Rajdhani';font-size:11px;letter-spacing:2px;color:rgba(255,215,0,.35);text-transform:uppercase}
+.ps-footer-txt span{background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700;letter-spacing:3px}
+
+.sync-toast{position:fixed;bottom:12px;right:12px;background:rgba(34,30,50,.95);border:1px solid rgba(124,58,237,.4);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--cyan);z-index:999;backdrop-filter:blur(10px)}
+
+::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:#0f0d1a} ::-webkit-scrollbar-thumb{background:#3d3560;border-radius:3px}
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────── */
+/* Tablet */
+/* ─── FLUID BASE — all layouts use flexible units ─── */
+html{font-size:16px}
+
+/* ─── TABLET 900px ─── */
+@media(max-width:900px){
+  .tgrid{grid-template-columns:repeat(2,1fr);gap:12px;padding:12px}
+  .pgg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .sqg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .al{grid-template-columns:1fr 260px}
+  .cap-layout{grid-template-columns:1fr 240px}
+  .rbn{padding:24px 16px}
+  .rbt{font-size:40px}
+}
+
+/* ─── SMALL TABLET / LARGE PHONE 768px ─── */
+@media(max-width:768px){
+  /* Layouts stack vertically */
+  .al{grid-template-columns:1fr;min-height:unset;overflow:visible}
+  .sb{max-height:none;border-left:none;border-top:1px solid var(--bd);overflow:visible}
+  .ls{max-height:160px}
+  .cap-layout{grid-template-columns:1fr;min-height:unset;overflow:visible}
+  .cap-side{max-height:none;border-left:none;border-top:1px solid var(--bd);overflow:visible}
+  /* Grids */
+  .bg{grid-template-columns:repeat(3,1fr);gap:5px}
+  .tgrid{grid-template-columns:1fr;gap:10px;padding:10px}
+  .pgg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .sqg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .cap-pts-strip{grid-template-columns:repeat(2,2fr) repeat(2,1fr)}
+  /* Type scaling */
+  .pn{font-size:24px;letter-spacing:2px}
+  .ba{font-size:32px}
+  .cbd-amount{font-size:40px!important}
+  .rbt{font-size:36px;letter-spacing:3px}
+  /* Components */
+  .hdr{padding:8px 14px}
+  .hl{font-size:17px;letter-spacing:2px}
+  .hl-sub{display:none}
+  .nav{padding:0 10px}
+  .nt{padding:11px 10px;font-size:12px;letter-spacing:.5px}
+  .stg{padding:12px}
+  .cap-main{padding:12px}
+  .spl{padding:16px;margin-bottom:10px}
+  .bid-stage{padding:14px}
+  .bb{padding:11px;margin-bottom:10px}
+  .ar{gap:6px}
+  .sdb,.usb{padding:11px;font-size:17px}
+  .ss{padding:10px}
+  .tfs{gap:5px;padding:0 10px 10px}
+  .tfh{padding:12px}
+  /* Login */
+  .lhero-parsippany{font-size:34px;letter-spacing:4px}
+  .lhero-title{font-size:34px;letter-spacing:4px}
+  .lhero-teams{gap:12px;padding:14px 16px}
+  .lb{padding:22px 20px}
+}
+
+/* ─── MOBILE 480px ─── */
+@media(max-width:480px){
+  /* Header compact */
+  .hdr{padding:7px 10px;gap:5px}
+  .hlw{gap:7px}
+  .hl{font-size:15px;letter-spacing:1.5px}
+  .hr{gap:5px}
+  .rp{display:none}
+  .xb,.nb{padding:5px 8px;font-size:10px}
+  /* Nav scrollable tight */
+  .nav{padding:0 6px;gap:1px}
+  .nt{padding:10px 8px;font-size:11px;letter-spacing:0}
+  /* Auction stage */
+  .stg{padding:8px}
+  .spl{padding:12px;border-radius:14px}
+  .pav{width:64px;height:64px;font-size:15px}
+  .pn{font-size:20px;letter-spacing:1.5px;margin-bottom:5px}
+  .pm{gap:5px;margin-bottom:10px}
+  .ch{padding:3px 8px;font-size:10px}
+  .tt{font-size:9px;padding:3px 10px;margin-bottom:8px}
+  .bb{padding:10px;margin-bottom:10px;border-radius:10px}
+  .bl{font-size:8px}
+  .ba{font-size:28px}
+  .bs{font-size:10px}
+  /* Bid buttons — 3 cols always */
+  .bg{grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:7px}
+  .tbb{padding:8px 5px;border-radius:8px;font-size:10px}
+  .ar{gap:5px}
+  .sdb{font-size:16px;padding:10px;border-radius:9px}
+  .usb{font-size:16px;padding:10px;border-radius:9px}
+  /* Sidebar */
+  .sb{max-height:200px}
+  .sbt{font-size:8px;margin-bottom:8px}
+  .tc{padding:8px;margin-bottom:5px}
+  .sc{font-size:8px}
+  .lt{font-size:9px}
+  .lr{padding:4px 0}
+  /* Captain */
+  .cap-pts-strip{grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:12px}
+  .cs{padding:9px 6px}
+  .csv{font-size:18px}
+  .csl{font-size:7px}
+  .bid-stage{padding:12px;border-radius:14px;margin-bottom:12px}
+  .cbd-amount{font-size:34px!important}
+  .cbb{font-size:18px;padding:14px;letter-spacing:2px}
+  .cap-main{padding:8px}
+  .cap-side-sec{padding:10px}
+  .cap-side-title{font-size:8px;margin-bottom:8px}
+  .cap-sq-name{font-size:10px}
+  .cap-sq-role{font-size:8px}
+  .cap-sq-price{font-size:10px}
+  /* Login */
+  .lhero-parsippany{font-size:26px;letter-spacing:3px}
+  .lhero-title{font-size:26px;letter-spacing:3px}
+  .lhero-sep{font-size:26px}
+  .lhero-tag{font-size:9px;letter-spacing:2px}
+  .lhero-teams{flex-wrap:wrap;gap:8px;padding:10px}
+  .lhero-team-name{font-size:8px;letter-spacing:1px}
+  .lb{padding:16px 14px;border-radius:16px}
+  .ls{font-size:11px;margin-bottom:14px}
+  .rg{gap:6px}
+  .rb{padding:12px 6px;border-radius:10px}
+  .ri{font-size:20px;margin-bottom:3px}
+  .rn{font-size:12px}
+  .rh{font-size:8px}
+  .inp{padding:10px 12px;font-size:13px}
+  .gb{padding:12px;font-size:17px}
+  /* Teams / Players grid */
+  .tgrid{grid-template-columns:1fr;gap:8px;padding:8px}
+  .pgg{grid-template-columns:repeat(2,1fr);gap:6px}
+  .sqg{grid-template-columns:repeat(2,1fr);gap:6px}
+  .pgw{padding:8px}
+  .fr{gap:4px;margin-bottom:10px}
+  .fb{font-size:10px;padding:4px 9px}
+  .pc{padding:10px}
+  .pcav{width:34px;height:34px;font-size:9px}
+  .pcn{font-size:12px}
+  .pcr{font-size:8px}
+  /* Round banner */
+  .rbn{padding:20px 12px}
+  .rbt{font-size:28px;letter-spacing:2px}
+  .rbb{padding:12px 28px;font-size:18px;letter-spacing:2px}
+  .rbd{font-size:12px;margin-bottom:18px}
+  /* Popups */
+  .viewer-sold-popup{padding:24px 18px;border-radius:16px}
+  .vsp-player{font-size:28px}
+  .cap-celeb-popup{padding:24px 18px;border-radius:18px}
+  .celeb-title{font-size:32px;letter-spacing:3px}
+  .celeb-player{font-size:24px}
+  /* Misc */
+  .done{padding:28px 12px}
+  .dtl{font-size:32px;letter-spacing:3px}
+  .rbe{font-size:9px;letter-spacing:2px}
+  .vtk{padding:7px 10px;gap:7px}
+  .vtxt{font-size:10px}
+}
+
+/* ─── TINY PHONES 360px ─── */
+@media(max-width:360px){
+  .lhero-parsippany,.lhero-title{font-size:22px;letter-spacing:2px}
+  .nt{padding:8px 5px;font-size:10px}
+  .pgg,.sqg{grid-template-columns:1fr}
+  .bg{grid-template-columns:repeat(3,1fr);gap:3px}
+  .tbb{padding:7px 4px;font-size:9px}
+  .csv{font-size:16px}
+  .ba{font-size:24px}
+  .sdb,.usb{font-size:14px;padding:9px}
+  .cbb{font-size:16px;padding:12px}
+}
+`;
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [fbReady,setFbReady]=useState<boolean>(()=>{try{initFB(FULL_FB_CONFIG);return true;}catch{return false;}});
+  const [role,setRole]=useState<Role>("login");
+  const [teamId,setTeamId]=useState<number|null>(null);
+  const [st,setSt]=useState<AuctionState>(INIT_STATE);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  // Viewer sold popup
+  const [viewerPopup,setViewerPopup]=useState<AuctionState["lastSold"]|null>(null);
+  // Captain celebration popup
+  const [celebPopup,setCelebPopup]=useState<{playerName:string;price:number;purseLeft:number}|null>(null);
+
+  const prevLastSold=useRef<string|null>(null);
+  const prevCurBidder=useRef<number|null>(null);
+
+  useEffect(()=>{
+    if(!fbReady){setLoading(false);return;}
+    initAuth().catch(()=>{}); // write hashed passwords to Firebase on first run
+    let unsub:(()=>void)|null=null;
+    try{
+      unsub=onValue(fbRef(),snap=>{
+        try{
+          if(snap.exists()){
+            const raw=snap.val() as AuctionState;
+            if(!raw.dataVersion||raw.dataVersion<DATA_VERSION){
+              writeSt(INIT_STATE).catch(()=>{});setSt(INIT_STATE);
+            } else {
+              const safe:AuctionState={
+                ...INIT_STATE,...raw,
+                ...safeParse(raw),
+                lastSold:raw.lastSold??null,
+              };
+              setSt(safe);
+              // Trigger viewer popup when lastSold changes
+              if(raw.lastSold){
+                const key=`${raw.lastSold.playerName}-${raw.lastSold.teamId}`;
+                if(key!==prevLastSold.current){
+                  prevLastSold.current=key;
+                  setViewerPopup(raw.lastSold);
+                  setTimeout(()=>setViewerPopup(null),4500);
+                }
+              }
+            }
+          } else { writeSt(INIT_STATE).catch(()=>{}); setSt(INIT_STATE); }
+        } catch { setSt(INIT_STATE); }
+        setLoading(false);
+      },()=>setLoading(false));
+    } catch { setLoading(false); }
+    return ()=>{ unsub&&unsub(); };
+  },[fbReady]);
+
+  const addLog=(prev:AuctionState,icon:string,text:string):LogItem[]=>{
+    const time=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    return [{icon,text,time},...safeArr(prev.log).slice(0,59)];
+  };
+  // Direct Firebase functions — no useCallback stale closure issues
+  const write=async(next:AuctionState)=>{try{await set(ref(getDb(),"psAuction_v23"),next);}catch(e){console.error("write error",e);}};
+  const patch=async(p:Partial<AuctionState>)=>{try{await update(ref(getDb(),"psAuction_v23"),p);}catch(e){console.error("patch error",e);}};
+
+  const startRound=async(round:number)=>{
+    const snap=await readSt(); // needs fresh data to get unsold players
+    const captainIds=Object.values(CAPTAIN_MAP);
+    const sorted=[...safeArr(snap.players)]
+      .filter(p=>!captainIds.includes(p.id)) // exclude captains from auction
+      .sort((a,b)=>b.basePrice-a.basePrice);
+    const queue=round===1?sorted.map(p=>p.id):sorted.filter(p=>p.soldTo===null).map(p=>p.id);
+    if(!queue.length){alert("No unsold players!");return;}
+    const first=snap.players.find(p=>p.id===queue[0]);
+    const log=addLog(snap,"🎙️",`Round ${round} started! ${queue.length} players.`);
+    await set(ref(getDb(),"psAuction_v23"),{...snap,queue,curIdx:0,curBid:0,curBidder:null,firstBidder:null,aRound:round,phase:"running",showSold:false,log,lastSold:null});
+  };
+
+  const placeBid=async(tid:number)=>{
+    // Use local st directly — already live-synced via onValue, no need for readSt()
+    const snap=st;
+    const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
+    if(!cp||snap.phase!=="running")return;
+    const team=safeArr(snap.teams).find(t=>t.id===tid);
+    if(!team)return;
+    const safeCurBid = snap.curBidder !== null
+      ? Math.max(snap.curBid, cp.basePrice)
+      : 0;
+    const nb = snap.curBidder === null
+      ? cp.basePrice
+      : snap.curBidder === tid
+        ? safeCurBid
+        : safeCurBid + MIN_BID;
+    if(team.purse<nb)return;
+    const skipped=safeArr(snap.skippedTeams).filter(id=>id!==tid);
+    const firstBidder=snap.firstBidder!==null?snap.firstBidder:(snap.curBidder===null?tid:snap.firstBidder);
+    const log=addLog(snap,"💰",`${team.short} bid ${fmt(nb)} for ${cp.name}`);
+    await update(ref(getDb(),"psAuction_v23"),{curBid:nb,curBidder:tid,firstBidder,log,skippedTeams:skipped});
+  };
+
+  // SKIP: captain passes on this player. If ALL teams have skipped → mark unsold.
+  const doSkip=async(tid:number)=>{
+    const snap=st; // use local state
+    const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
+    if(!cp||snap.phase!=="running")return;
+    const team=safeArr(snap.teams).find(t=>t.id===tid);
+    if(!team)return;
+    const skipped=[...new Set([...safeArr(snap.skippedTeams),tid])];
+    const activeBidders=safeArr(snap.teams).filter(t=>
+      safeArr(t.squad).length<MAX_SQUAD &&
+      t.marqueeCount<MAX_MARQUEE &&
+      t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?Math.max(snap.curBid,cp.basePrice):Math.max(snap.curBid,cp.basePrice)+MIN_BID) &&
+      !skipped.includes(t.id)
+    );
+    const log=addLog(snap,"⏭️",`${team.short} passed on ${cp.name}`);
+    if(activeBidders.length===0){
+      // All teams skipped → auto unsold
+      const log2=addLog({...snap,log},"❌",`${cp.name} UNSOLD — all teams passed`);
+      await update(ref(getDb(),"psAuction_v23"),{log:log2,skippedTeams:[],lastSold:null,firstBidder:null});
+      advance();
+    } else {
+      await update(ref(getDb(),"psAuction_v23"),{log,skippedTeams:skipped,firstBidder:snap.firstBidder??null});
+    }
+  };
+
+  const doSold=async()=>{
+    const snap=st; // use local state
+    if(snap.curBidder===null)return;
+    const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
+    if(!cp)return;
+    const team=safeArr(snap.teams).find(t=>t.id===snap.curBidder);
+    if(!team)return;
+    const sp:SquadPlayer={...cp,soldPrice:snap.curBid,isMarquee:true,round:snap.aRound};
+    const newTeams=safeArr(snap.teams).map(t=>t.id===snap.curBidder
+      ?{...t,purse:t.purse-snap.curBid,squad:[...safeArr(t.squad),sp],marqueeCount:t.marqueeCount+1}:t);
+    const newPlayers=safeArr(snap.players).map(p=>p.id===cp.id?{...p,soldTo:snap.curBidder,soldPrice:snap.curBid,round:snap.aRound}:p);
+    const log=addLog(snap,"🔨",`SOLD! ${cp.name} → ${team.short} for ${fmt(snap.curBid)}`);
+    const lastSold={playerName:cp.name,teamName:team.name,teamColor:team.color,teamId:team.id,price:snap.curBid};
+    // Captain celebration: if the winning captain is viewing this session
+    const winnerTeam=newTeams.find(t=>t.id===snap.curBidder);
+    if(teamId===snap.curBidder&&winnerTeam){
+      setCelebPopup({playerName:cp.name,price:snap.curBid,purseLeft:winnerTeam.purse});
+    }
+    await set(ref(getDb(),"psAuction_v23"),{...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:snap.firstBidder??null});
+    setTimeout(()=>advance(),2100);
+  };
+
+  const doUnsold=async()=>{
+    const snap=st; // use local state
+    const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
+    if(!cp)return;
+    const log=addLog(snap,"❌",`${cp.name} UNSOLD`);
+    await update(ref(getDb(),"psAuction_v23"),{log,lastSold:null,firstBidder:null,showSold:false});
+    advance();
+  };
+
+  // Assign current player to a broke team at base price (0 pts deducted)
+  const doAssignFree=async(teamId:number)=>{
+    const snap=st;
+    const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
+    if(!cp||snap.phase!=="running")return;
+    const team=safeArr(snap.teams).find(t=>t.id===teamId);
+    if(!team)return;
+    const sp:SquadPlayer={...cp,soldPrice:0,isMarquee:true,round:snap.aRound,isCaptain:false};
+    const newTeams=safeArr(snap.teams).map(t=>t.id===teamId
+      ?{...t,squad:[...safeArr(t.squad),sp],marqueeCount:t.marqueeCount+1}:t);
+    const newPlayers=safeArr(snap.players).map(p=>p.id===cp.id
+      ?{...p,soldTo:teamId,soldPrice:0,round:snap.aRound}:p);
+    const log=addLog(snap,"🎁",`${cp.name} → ${team.short} (base price — purse empty)`);
+    const lastSold={playerName:cp.name,teamName:team.name,teamColor:team.color,teamId:team.id,price:0};
+    await set(ref(getDb(),"psAuction_v23"),{...snap,teams:newTeams,players:newPlayers,showSold:true,log,lastSold,firstBidder:null});
+    setTimeout(()=>advance(),2100);
+  };
+
+  const advance=async()=>{
+    const snap=await readSt();
+    const captainIds=Object.values(CAPTAIN_MAP);
+
+    // Teams still needing players
+    const teamsNeedMore=safeArr(snap.teams).filter(t=>
+      safeArr(t.squad).length<MAX_SQUAD && t.marqueeCount<MAX_MARQUEE
+    );
+
     // All full → done
     if(teamsNeedMore.length===0){
       const unsold=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id)).map(p=>p.id);
@@ -992,6 +1968,21 @@ export default function App() {
       log,lastSold:null,skippedTeams:[],
     });
   }
+  const startNextRound=async()=>{
+    const snap=await readSt();
+    const captainIds=Object.values(CAPTAIN_MAP);
+    const unsold=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
+    if(unsold.length===0){alert("No unsold players!");return;}
+    const newQueue=unsold.sort((a,b)=>b.basePrice-a.basePrice).map(p=>p.id);
+    const nextRound=snap.aRound+1;
+    const log=addLog(snap,"🎙️",`Round ${nextRound} started! ${newQueue.length} unsold players.`);
+    await set(ref(getDb(),"psAuction_v23"),{
+      ...snap,
+      queue:newQueue,curIdx:0,curBid:0,curBidder:null,firstBidder:null,
+      aRound:nextRound,phase:"running",showSold:false,
+      log,lastSold:null,skippedTeams:[],
+    });
+  };
   const resetAll=async()=>{if(!confirm("Reset ALL data?"))return;prevLastSold.current=null;await writeSt(INIT_STATE);};
   const logout=()=>{setRole("login");setTeamId(null);};
   const curPlayer=safeArr(st.queue).length>0?safeArr(st.players).find(p=>p.id===st.queue[st.curIdx]):undefined;
@@ -1084,7 +2075,7 @@ export default function App() {
     )}
 
     {role==="login"&&<LoginScreen teams={safeArr(st.teams)} onLogin={(r,tid)=>{setRole(r);if(tid!==undefined)setTeamId(tid);}}/>}
-    {role==="admin"&&<AdminView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} progPct={progPct} onBid={placeBid} onSold={doSold} onUnsold={doUnsold} onSkip={doSkip} onAssignFree={doAssignFree} onStartRound={startRound} onLogout={logout} onReset={resetAll} canBid={canBid} hasSkipped={hasSkipped}/>}
+    {role==="admin"&&<AdminView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} progPct={progPct} onBid={placeBid} onSold={doSold} onUnsold={doUnsold} onSkip={doSkip} onAssignFree={doAssignFree} onStartRound={startRound} onNextRound={startNextRound} onLogout={logout} onReset={resetAll} canBid={canBid} hasSkipped={hasSkipped}/>}
     {role==="captain"&&myTeam&&<CaptainView myTeam={myTeam} st={st} curPlayer={curPlayer} onBid={placeBid} onSkip={doSkip} onLogout={logout} canBid={canBid} hasSkipped={hasSkipped}/>}
     {role==="viewer"&&<ViewerView st={st} curPlayer={curPlayer} leadTeam={leadTeam} soldCount={soldCount} onLogout={logout}/>}
   </>);
@@ -1202,9 +2193,9 @@ function LoginScreen({teams,onLogin}:{teams:Team[];onLogin:(r:Role,tid?:number)=
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
-function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsold,onSkip,onAssignFree,onStartRound,onLogout,onReset,canBid,hasSkipped}:{
+function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsold,onSkip,onAssignFree,onStartRound,onNextRound,onLogout,onReset,canBid,hasSkipped}:{
   st:AuctionState;curPlayer:Player|undefined;leadTeam:Team|undefined;soldCount:number;progPct:number;
-  onBid:(id:number)=>void;onSold:()=>void;onUnsold:()=>void;onSkip:(id:number)=>void;onAssignFree:(id:number)=>void;onStartRound:(r:number)=>void;onLogout:()=>void;onReset:()=>void;canBid:(t:Team)=>boolean;hasSkipped:(id:number)=>boolean;
+  onBid:(id:number)=>void;onSold:()=>void;onUnsold:()=>void;onSkip:(id:number)=>void;onAssignFree:(id:number)=>void;onStartRound:(r:number)=>void;onNextRound:()=>void;onLogout:()=>void;onReset:()=>void;canBid:(t:Team)=>boolean;hasSkipped:(id:number)=>boolean;
 }){
   const [tab,setTab]=useState<"auction"|"players"|"teams">("auction");
   const [filter,setFilter]=useState("All");
@@ -1230,6 +2221,81 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
 
     {tab==="auction"&&(
       st.aDone?<DoneScreen teams={teams} players={players} rotatingPool={safeArr(st.rotatingPool)}/>:
+      st.phase==="roundDone"?(()=>{
+        const captainIds=Object.values(CAPTAIN_MAP);
+        const unsoldPs=safeArr(st.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
+        const teamsNeedMore=safeArr(st.teams).filter(t=>safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE);
+        return(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+            padding:"48px 24px",textAlign:"center"}}>
+            <div style={{fontSize:52,marginBottom:12}}>✅</div>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:38,letterSpacing:4,color:"var(--gold)",marginBottom:8}}>
+              ROUND {st.aRound} COMPLETE
+            </div>
+            <div style={{fontSize:14,color:"var(--mut)",marginBottom:8}}>
+              <span style={{color:"var(--warn)",fontWeight:700,fontSize:18}}>{unsoldPs.length} unsold players</span> ready for Round {st.aRound+1}
+            </div>
+            <div style={{display:"flex",gap:12,marginBottom:24}}>
+              {teamsNeedMore.map(t=>(
+                <span key={t.id} style={{color:t.color,fontWeight:700,fontSize:13}}>
+                  {t.short}: {safeArr(t.squad).length}/{MAX_SQUAD}
+                </span>
+              ))}
+            </div>
+            {/* Unsold players list */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:7,justifyContent:"center",marginBottom:28,maxWidth:520}}>
+              {unsoldPs.map(p=>(
+                <div key={p.id} style={{background:"rgba(124,58,237,.12)",border:"1px solid rgba(124,58,237,.25)",
+                  borderRadius:8,padding:"4px 12px",fontSize:12,color:"var(--txt)"}}>
+                  {p.name} · {p.role}
+                </div>
+              ))}
+            </div>
+            {/* Broke teams — assign at base */}
+            {teamsNeedMore.filter(t=>t.purse<100).length>0&&(
+              <div style={{marginBottom:24,padding:"14px 20px",background:"rgba(52,211,153,.07)",
+                border:"1px solid rgba(52,211,153,.3)",borderRadius:12,maxWidth:440,width:"100%"}}>
+                <div style={{fontSize:12,color:"#34d399",marginBottom:10,fontWeight:700,letterSpacing:1}}>
+                  🎁 PURSE EMPTY — Assign player to broke team first
+                </div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
+                  {teamsNeedMore.filter(t=>t.purse<100).map(t=>(
+                    <button key={t.id}
+                      style={{padding:"9px 18px",background:"rgba(52,211,153,.18)",
+                        border:"2px solid rgba(52,211,153,.5)",borderRadius:9,
+                        color:"#34d399",fontFamily:"'Bebas Neue'",fontSize:14,cursor:"pointer",letterSpacing:1}}
+                      onClick={()=>{
+                        if(unsoldPs.length===0){alert("No unsold players!");return;}
+                        // assign first unsold to this broke team
+                        const p=unsoldPs[0];
+                        const sp={...p,soldPrice:0,isMarquee:true,round:st.aRound,isCaptain:false};
+                        const newTeams=safeArr(st.teams).map(tm=>tm.id===t.id?{...tm,squad:[...safeArr(tm.squad),sp],marqueeCount:tm.marqueeCount+1}:tm);
+                        const newPlayers=safeArr(st.players).map(pl=>pl.id===p.id?{...pl,soldTo:t.id,soldPrice:0,round:st.aRound}:pl);
+                        const log=[{icon:"🎁",text:`${p.name} → ${t.short} (base — purse empty)`,time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})},...safeArr(st.log).slice(0,59)];
+                        set(ref(getDb(),"psAuction_v23"),{...st,teams:newTeams,players:newPlayers,log,lastSold:null});
+                      }}>
+                      🎁 ASSIGN TO {t.name.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              style={{padding:"16px 52px",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",
+                border:"none",borderRadius:14,color:"#fff",fontFamily:"'Bebas Neue'",
+                fontSize:26,letterSpacing:4,cursor:"pointer",
+                boxShadow:"0 4px 24px rgba(124,58,237,.5)",marginTop:8}}
+              onClick={onNextRound}>
+              ▶ START ROUND {st.aRound+1}&nbsp;&nbsp;({unsoldPs.length} PLAYERS)
+            </button>
+            <div style={{marginTop:12,fontSize:11,color:"var(--mut)"}}>
+              All sold players are locked in their teams · Only unsold players re-enter
+            </div>
+            <div style={{marginTop:24,width:"100%"}}><AdminTeamCards teams={teams}/></div>
+            <Footer/>
+          </div>
+        );
+      })():
       st.phase==="banner"?(
         <div>
           <div className="rbn">
@@ -1569,7 +2635,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
 
         {/* MAIN BIDDING STAGE */}
         <div className={`bid-stage ${st.phase==="running"&&curPlayer?isLeading?"leading":"hot":""}`}>
-          {st.phase==="banner"&&<div className="nm">⏳ Waiting for admin to start the auction…</div>}
+          {(st.phase==="banner"||st.phase==="roundDone")&&<div className="nm">{st.phase==="roundDone"?`⏸️ Round ${st.aRound} done — admin starting Round ${st.aRound+1} shortly…`:"⏳ Waiting for admin to start the auction…"}</div>}
           {st.phase==="done"&&<div className="nm">🏆 Auction complete! Check your squad in the sidebar.</div>}
           {st.phase==="running"&&!curPlayer&&<div className="nm">Loading next player…</div>}
           {st.phase==="running"&&curPlayer&&(<>
@@ -2086,4 +3152,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — safeParse fix</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — manual round start</span></div></div>);}
