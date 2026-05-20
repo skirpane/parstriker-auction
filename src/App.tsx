@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v16");
+const fbRef=()=>ref(getDb(),"psAuction_v17");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=16;
+const TOTAL_ROUNDS=3; const DATA_VERSION=17;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -126,21 +126,21 @@ const PLAYER_PRICES:Record<number,number>={
   // Captains (4, 8, 18) pre-assigned — 100 pts reference only
   1:100,2:100,3:100,4:100,5:100,6:100,7:100,8:100,9:100,10:100,
   11:100,12:100,13:100,14:100,15:100,16:100,17:100,18:100,19:100,20:100,
-  21:100,22:100,23:100,24:100,25:100,26:100,27:100,
+  21:100,22:100,23:100,24:100,25:100,26:100,27:100,28:100,
 };
 
 
 const RAW_PLAYERS=[
-  {id:1,  name:"Abdul Mubeen",        role:"Bowling All-Rounder",  img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
+  {id:1, name:"Pranay Raj",          role:"Batsman",              img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},  
   {id:2,  name:"Amit Jadli",          role:"Batsman / WK",         img:"AJ",   chUrl:"https://cricheroes.com/player-profile/9673952/amit-jadli/matches"},
   {id:3,  name:"Aravind",             role:"Bowling All-Rounder",  img:"AK",   chUrl:"https://cricheroes.com/player-profile/9980891/aravind/matches"},
   {id:4,  name:"Ashish Nageet",       role:"All-Rounder",          img:"AN",   chUrl:"https://cricheroes.com/player-profile/9793757/ashish-nageet/matches"},
   {id:5,  name:"Hari Reddy",          role:"Bowler",               img:"HR",   chUrl:"https://cricheroes.com/player-profile/16012495/hari-reddy-m/matches"},
-  {id:6,  name:"Janesh Chohan",       role:"All-Rounder",          img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
+  {id:6,  name:"Karan Shah",          role:"Batsman",              img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
   {id:7,  name:"Jitendra Mistry",     role:"Batsman",              img:"JM",   chUrl:"https://cricheroes.com/player-profile/30599224/jimmy-mistry/matches"},
   {id:8,  name:"Kannan Santharam",    role:"Bowler",               img:"KS",   chUrl:"https://cricheroes.com/player-profile/22879359/kannan-shantharam/matches"},
   {id:9,  name:"Karthik Vempati",     role:"All-Rounder",          img:"KV",   chUrl:"https://cricheroes.com/player-profile/22954447/karthik-vempati/matches"},
-  {id:10, name:"Krunal Shah",         role:"All-Rounder",          img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
+  {id:10, name:"Nikhil Surabhi",      role:"Batsman",              img:"NS",   chUrl:"https://cricheroes.com/player-profile/9670538/nikhil-surabhi/matches"},
   {id:11, name:"Ravinder Negi",       role:"All-Rounder",          img:"RN",   chUrl:"https://cricheroes.com/player-profile/3035827/ravinder-negi(-mahi)/matches"},
   {id:12, name:"Pradeep Patil",       role:"Bowler",               img:"PP",   chUrl:"https://cricheroes.com/player-profile/31680295/pradeep-reddy-patil/matches"},
   {id:13, name:"Nikhil Shah",         role:"Batsman / WK",         img:"NSh",  chUrl:"https://cricheroes.com/player-profile/50005870/nikhil-shah/matches"},
@@ -156,10 +156,9 @@ const RAW_PLAYERS=[
   {id:23, name:"Kayur",               role:"Bowling All-Rounder",  img:"KAy",  chUrl:"https://cricheroes.com/player-profile/42050777/kayur-cric/matches"},
   {id:24, name:"Tushar More",         role:"Bowler",               img:"TM",   chUrl:"https://cricheroes.com/player-profile/23108798/tushar-more/matches"},
   {id:25, name:"Saravanan Marimuthu", role:"Batsman",              img:"SM",   chUrl:"https://cricheroes.com/player-profile/50323634/saravanan-marimuthu/matches"},
-  {id:26, name:"Karan Shah",          role:"Batsman",              img:"KSh2", chUrl:"https://cricheroes.com/player-profile/49554178/karan-shah/matches"},
-  {id:27, name:"Pranay Raj",          role:"Batsman",              img:"PR",   chUrl:"https://cricheroes.com/player-profile/3559467/pranay/matches"},
-  
-  
+  {id:26, name:"Janesh Chohan",       role:"All-Rounder",          img:"JC",   chUrl:"https://cricheroes.com/player-profile/9675501/janesh-chohan/matches"},
+  {id:27, name:"Abdul Mubeen",        role:"Bowling All-Rounder",  img:"AM",   chUrl:"https://cricheroes.com/player-profile/39761525/abdul-mubeen-mohammed/stats"},
+  {id:28, name:"Krunal Shah",         role:"All-Rounder",          img:"KSh",  chUrl:"https://cricheroes.com/player-profile/23101496/krunal-shah/matches"},
 ];
 
 const roleTier=(r:string):string=>{
@@ -827,7 +826,7 @@ export default function App() {
     if(!queue.length){alert("No unsold players!");return;}
     const first=snap.players.find(p=>p.id===queue[0]);
     const log=addLog(snap,"🎙️",`Round ${round} started! ${queue.length} players.`);
-    await write({...snap,queue,curIdx:0,curBid:first?.basePrice??20,curBidder:null,aRound:round,phase:"running",showSold:false,log,lastSold:null});
+    await write({...snap,queue,curIdx:0,curBid:0,curBidder:null,aRound:round,phase:"running",showSold:false,log,lastSold:null});
   };
 
   const placeBid=async(tid:number)=>{
@@ -959,7 +958,7 @@ export default function App() {
       }
     } else {
       const np=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[next]);
-      await patch({curIdx:next,curBid:np?.basePrice??20,curBidder:null,showSold:false,lastSold:null,skippedTeams:[]} as Partial<AuctionState>);
+      await patch({curIdx:next,curBid:0,curBidder:null,showSold:false,lastSold:null,skippedTeams:[]} as Partial<AuctionState>);
     }
   };
 
@@ -1251,7 +1250,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                     </div>
                 <div className="bb">
                   <div className="bl">{st.curBidder!==null?"🔥 Current Bid":"🎯 Opening Price — First Bid = Base"}</div>
-                  <div className="ba">{fmt(st.curBid)}</div>
+                  <div className="ba">{fmt(st.curBidder!==null?st.curBid:curPlayer?.basePrice??0)}</div>
                   <div className="bs">+{fmt(MIN_BID)} per raise · min bid: {fmt(curPlayer.basePrice)}</div>
                   {leadTeam&&<div className="bldr" style={{color:leadTeam.color}}>🔥 {leadTeam.name} leading</div>}
                 </div>
@@ -1519,7 +1518,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                   :st.curBidder!==null?"⚡ OUTBID PRICE (someone leading)"
                   :"🎯 OPENING PRICE — You pay exactly this"}
               </div>
-              <div className={`cbd-amount ${isLeading?"leading-amount":""}`}>{fmt(st.curBid)}</div>
+              <div className={`cbd-amount ${isLeading?"leading-amount":""}`}>{fmt(st.curBidder!==null?st.curBid:curPlayer?.basePrice??0)}</div>
               {!isLeading&&st.curBidder!==null&&leadTeam&&(
                 <div className="cbd-leader" style={{background:`${leadTeam.color}22`,color:leadTeam.color}}>
                   ⚠ {leadTeam.name} is leading!
