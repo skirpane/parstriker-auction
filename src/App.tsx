@@ -21,7 +21,7 @@ const saveCfg=(_c:FBConfig)=>{};
 let _app:FirebaseApp|null=null,_db:Database|null=null;
 const initFB=(cfg:FBConfig):Database=>{if(!_app){_app=initializeApp(cfg);_db=getDatabase(_app);}return _db!;};
 const getDb=():Database=>{if(_db)return _db;const c=loadCfg();if(c)return initFB(c);throw new Error("FB not ready");};
-const fbRef=()=>ref(getDb(),"psAuction_v20");
+const fbRef=()=>ref(getDb(),"psAuction_v21");
 const authRef=()=>ref(getDb(),"psAuth_v1"); // separate node — stores hashed passwords only
 const readSt=async():Promise<AuctionState>=>{const s=await get(fbRef());return s.exists()?s.val() as AuctionState:INIT_STATE;};
 const writeSt=async(s:AuctionState)=>set(fbRef(),s);
@@ -70,7 +70,7 @@ interface AuctionState{queue:number[];curIdx:number;curBid:number;curBidder:numb
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PURSE=1100; const MIN_BID=10; const MAX_SQUAD=8; const MAX_MARQUEE=7;
-const TOTAL_ROUNDS=3; const DATA_VERSION=20;
+const TOTAL_ROUNDS=3; const DATA_VERSION=21;
 const safeArr=<T,>(a:T[]|null|undefined):T[]=>Array.isArray(a)?a:[];
 const fmt=(v:number):string=>`${v} pts`;
 const tc=(t:string):string=>({Elite:"#f59e0b","Batting All-Rounder":"#f59e0b",Premium:"#a78bfa",Keeper:"#38bdf8",Batsman:"#34d399",Bowler:"#fb923c"}[t]??"#94a3b8");
@@ -1517,19 +1517,25 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
             {/* Big bid display */}
             <div className="cur-bid-display">
               <div className="cbd-label">
-                {isLeading?"🔥 YOU ARE LEADING!"
-                  :st.curBidder!==null?"⚡ OUTBID PRICE (someone leading)"
-                  :"🎯 OPENING PRICE — You pay exactly this"}
+                {isLeading&&curBidSafe===curPlayer?.basePrice
+                  ?"🎯 YOU ARE FIRST BIDDER"
+                  :isLeading
+                  ?"🔥 YOU ARE LEADING!"
+                  :st.curBidder!==null
+                  ?"⚡ SOMEONE IS LEADING"
+                  :"🎯 OPENING PRICE"}
               </div>
               <div className={`cbd-amount ${isLeading?"leading-amount":""}`}>{fmt(st.curBidder!==null?Math.max(st.curBid,curPlayer?.basePrice??100):curPlayer?.basePrice??100)}</div>
               {!isLeading&&st.curBidder!==null&&leadTeam&&(
                 <div className="cbd-leader" style={{background:`${leadTeam.color}22`,color:leadTeam.color}}>
-                  ⚠ {leadTeam.name} is leading!
+                  ⚠ {leadTeam.name} has bid {fmt(curBidSafe)} pts — click BID {fmt(nextBid)} to outbid!
                 </div>
               )}
               {isLeading&&(
                 <div className="cbd-leader" style={{background:"rgba(0,255,136,.12)",color:"var(--ok)"}}>
-                  ✓ Your bid is highest — raise if needed!
+                  {curBidSafe===curPlayer?.basePrice
+                    ?`✓ You are the first bidder at ${fmt(curPlayer?.basePrice??100)} — if others pass, you win!`
+                    :"✓ Your bid is highest — raise if needed if someone counter-bids!"}
                 </div>
               )}
             </div>
