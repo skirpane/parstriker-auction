@@ -828,38 +828,30 @@ export default function App() {
   };
 
   const placeBid=async(tid:number)=>{
-    try{
-    const snap=await readSt();
+    // Use local st directly — already live-synced via onValue, no need for readSt()
+    const snap=st;
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
-    if(!cp){alert("BID FAILED: No current player found. Queue len="+safeArr(snap.queue).length+" idx="+snap.curIdx+" phase="+snap.phase);return;}
-    if(snap.phase!=="running"){alert("BID FAILED: phase="+snap.phase);return;}
+    if(!cp||snap.phase!=="running")return;
     const team=safeArr(snap.teams).find(t=>t.id===tid);
-    if(!team){alert("BID FAILED: team not found id="+tid);return;}
-    // ── PRICE RULE ────────────────────────────────────────────────────────
-    // safeCurBid: floor curBid at basePrice to prevent race-condition where
-    // Firebase still has curBid=0 when a second team reads and bids.
-    // Without this: 0 + 10 = 10 (wrong). With this: max(0,100) + 10 = 110 ✓
+    if(!team)return;
     const safeCurBid = snap.curBidder !== null
-      ? Math.max(snap.curBid, cp.basePrice)   // someone bid → floor at basePrice
-      : 0;                                     // nobody bid yet → 0 (first bid uses basePrice below)
+      ? Math.max(snap.curBid, cp.basePrice)
+      : 0;
     const nb = snap.curBidder === null
-      ? cp.basePrice                    // first bid → base price exactly (100)
+      ? cp.basePrice
       : snap.curBidder === tid
-        ? safeCurBid                    // same leader → no change
-        : safeCurBid + MIN_BID;         // outbidding → +10 on top of safe value
+        ? safeCurBid
+        : safeCurBid + MIN_BID;
     if(team.purse<nb)return;
-    // When a team bids, remove them from skipped list (they're back in)
     const skipped=safeArr(snap.skippedTeams).filter(id=>id!==tid);
-    // Set firstBidder only on the very first bid (when no one had bid before)
     const firstBidder=snap.firstBidder!==null?snap.firstBidder:(snap.curBidder===null?tid:snap.firstBidder);
     const log=addLog(snap,"💰",`${team.short} bid ${fmt(nb)} for ${cp.name}`);
     await patch({curBid:nb,curBidder:tid,firstBidder,log,skippedTeams:skipped} as Partial<AuctionState>);
-    }catch(err:any){alert("BID ERROR: "+err?.message||String(err));}
   };
 
   // SKIP: captain passes on this player. If ALL teams have skipped → mark unsold.
   const doSkip=async(tid:number)=>{
-    const snap=await readSt();
+    const snap=st; // use local state
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp||snap.phase!=="running")return;
     const team=safeArr(snap.teams).find(t=>t.id===tid);
@@ -883,7 +875,7 @@ export default function App() {
   };
 
   const doSold=async()=>{
-    const snap=await readSt();
+    const snap=st; // use local state
     if(snap.curBidder===null)return;
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp)return;
@@ -905,7 +897,7 @@ export default function App() {
   };
 
   const doUnsold=async()=>{
-    const snap=await readSt();
+    const snap=st; // use local state
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp)return;
     const log=addLog(snap,"❌",`${cp.name} UNSOLD (Round ${snap.aRound})`);
