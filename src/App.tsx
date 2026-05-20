@@ -815,7 +815,7 @@ export default function App() {
   const patch=useCallback(async(p:Partial<AuctionState>)=>{setSaving(true);try{await patchSt(p);}catch(e){console.error(e);}setSaving(false);},[]);
 
   const startRound=async(round:number)=>{
-    const snap=await readSt();
+    const snap=st; // use local state
     const captainIds=Object.values(CAPTAIN_MAP);
     const sorted=[...safeArr(snap.players)]
       .filter(p=>!captainIds.includes(p.id)) // exclude captains from auction
@@ -924,7 +924,7 @@ export default function App() {
   };
 
   const advance=async()=>{
-    const snap=await readSt();
+    const snap=st; // use local state — same as other functions
 
     // ── Check if all squads are already full ──────────────────────────────
     // Only end early if ALL teams have full squads (8/8 each)
@@ -1222,13 +1222,21 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
       st.phase==="banner"?(
         <div>
           <div className="rbn">
-            <div className="rbe">{st.aRound===0?"WELCOME TO":"ROUND "+st.aRound+" COMPLETE"}</div>
+            <div className="rbe">{st.aRound===0?"WELCOME TO":"🏏 ROUND "+st.aRound+" COMPLETE"}</div>
             <div className="rbt">{st.aRound===0?"PARSTRIKER AUCTION":`ROUND ${st.aRound+1} OF ${TOTAL_ROUNDS}`}</div>
             <div className="rbd">
-              {st.aRound===0?`${auctionPlayers.length} players · All at ${fmt(100)} base · ${TOTAL_ROUNDS} rounds · ${fmt(PURSE)} budget each`
-                :`${auctionPlayers.filter(p=>p.soldTo===null).length} unsold players re-enter · Round ${st.aRound+1} of ${TOTAL_ROUNDS}`}
+              {st.aRound===0
+                ?`${auctionPlayers.length} players · All at ${fmt(100)} base · ${TOTAL_ROUNDS} rounds · ${fmt(PURSE)} budget each`
+                :<>
+                  <strong style={{color:"var(--gold)"}}>{auctionPlayers.filter(p=>p.soldTo===null).length} unsold players</strong> re-enter the auction<br/>
+                  Teams still need players — bidding continues!<br/>
+                  <span style={{fontSize:11,opacity:.7}}>Round {st.aRound+1} of {TOTAL_ROUNDS}</span>
+                </>
+              }
             </div>
-            <button className="rbb" onClick={()=>onStartRound(st.aRound+1)}>{st.aRound===0?"⚡ START AUCTION":`▶ BEGIN ROUND ${st.aRound+1}`}</button>
+            <button className="rbb" onClick={()=>onStartRound(st.aRound+1)}>
+              {st.aRound===0?"⚡ START AUCTION":`▶ START ROUND ${st.aRound+1} (${auctionPlayers.filter(p=>p.soldTo===null).length} players)`}
+            </button>
           </div>
           <div className="tgrid"><AdminTeamCards teams={teams}/></div>
           <Footer/>
