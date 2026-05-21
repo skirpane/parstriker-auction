@@ -225,21 +225,8 @@ const INIT_STATE:AuctionState={
 
 // Main Parstriker logo — cricket bat + ball wordmark style
     const LogoParstriker=({size=48}:{size?:number})=>(
-      <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="60" cy="60" r="57" fill="#05050e" stroke="#a78bfa" strokeWidth="3"/>
-        <defs>
-          <linearGradient id="batGrad" x1="25" y1="95" x2="95" y2="25" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#e8d5a0"/>
-            <stop offset="100%" stopColor="#fff8e0"/>
-          </linearGradient>
-        </defs>
-        <rect x="28" y="52" width="13" height="54" rx="6.5" fill="url(#batGrad)" transform="rotate(-45 60 60)"/>
-        <rect x="79" y="17" width="5" height="16" rx="2.5" fill="#c41e3a" transform="rotate(-45 60 60)"/>
-        <circle cx="36" cy="80" r="13" fill="#c41e3a"/>
-        <path d="M28 76 Q36 70 44 76" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
-        <path d="M28 84 Q36 90 44 84" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
-      </svg>
-    );
+        <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:size*0.35,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>
+      );
     {/* Outer ring */}
     <circle cx="60" cy="60" r="57" fill="#05050e" stroke="url(#psGold)" strokeWidth="3"/>
     <defs>
