@@ -1311,8 +1311,13 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                         color:"#34d399",fontFamily:"'Bebas Neue'",fontSize:14,cursor:"pointer",letterSpacing:1}}
                       onClick={()=>{
                         if(unsoldPs.length===0){alert("No unsold players!");return;}
-                        // assign first unsold to this broke team
-                        const p=unsoldPs[0];
+                        // Show player selection dialog
+                        const playerNames=unsoldPs.map((p,i)=>`${i+1}. ${p.name} (${p.role})`).join("\n");
+                        const choice=prompt(`Select player for ${t.name}:\n\n${playerNames}\n\nEnter number (1-${unsoldPs.length}):`);
+                        if(!choice)return;
+                        const idx=parseInt(choice)-1;
+                        if(isNaN(idx)||idx<0||idx>=unsoldPs.length){alert("Invalid selection");return;}
+                        const p=unsoldPs[idx];
                         const sp={...p,soldPrice:0,isMarquee:true,round:st.aRound,isCaptain:false};
                         const newTeams=safeArr(st.teams).map(tm=>tm.id===t.id?{...tm,squad:[...safeArr(tm.squad),sp],marqueeCount:tm.marqueeCount+1}:tm);
                         const newPlayers=safeArr(st.players).map(pl=>pl.id===p.id?{...pl,soldTo:t.id,soldPrice:0,round:st.aRound}:pl);
