@@ -1392,7 +1392,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
             <div className="st">
               <div style={{display:"flex",alignItems:"center",gap:7}}>
                 <div className="rpill">ROUND {st.aRound}/{TOTAL_ROUNDS}</div>
-                <div style={{fontSize:10,color:"var(--mut)"}}>Sold: {soldCount}/{safeArr(st.queue).length}</div>
+                {""}
               </div>
               <div><div style={{fontSize:9,color:"var(--mut)",marginBottom:3}}>Player {st.curIdx+1}/{safeArr(st.queue).length}</div>
                 <div className="pb"><div className="pf" style={{width:`${progPct}%`}}/></div>
@@ -1922,7 +1922,7 @@ function ViewerView({st,curPlayer,leadTeam,soldCount,onLogout}:{
           On stage: <b style={{color:"var(--txt)"}}>{curPlayer.name}</b>
           {" · "}{curPlayer.role}
           {leadTeam&&<span> · <b style={{color:leadTeam.color}}>{leadTeam.name}</b> leading</span>}
-          {" · "}Round {st.aRound}/{TOTAL_ROUNDS} · {soldCount}/{auctionPlayers.length} sold
+          {""}
         </span>
       </div>
     )}
