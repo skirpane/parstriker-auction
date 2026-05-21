@@ -871,8 +871,7 @@ export default function App() {
     if(!team)return;
     const skipped=[...new Set([...safeArr(snap.skippedTeams),tid])];
     const activeBidders=safeArr(snap.teams).filter(t=>
-      safeArr(t.squad).length<MAX_SQUAD &&
-      t.marqueeCount<MAX_MARQUEE &&
+      t.marqueeCount<MAX_MARQUEE && // marqueeCount is reliable
       t.purse>=(snap.curBidder===null?cp.basePrice:snap.curBidder===t.id?Math.max(snap.curBid,cp.basePrice):Math.max(snap.curBid,cp.basePrice)+MIN_BID) &&
       !skipped.includes(t.id)
     );
@@ -941,17 +940,8 @@ export default function App() {
     const captainIds=Object.values(CAPTAIN_MAP);
 
     // Teams still needing players
-    const teamsNeedMore=safeArr(snap.teams).filter(t=>
-      safeArr(t.squad).length<MAX_SQUAD && t.marqueeCount<MAX_MARQUEE
-    );
-
-    // DEBUG — remove after fix
-    const debugInfo=safeArr(snap.teams).map(t=>`${t.short}:squad=${safeArr(t.squad).length},marq=${t.marqueeCount}`).join(" | ");
-    const unsoldDebug=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id)).length;
-    console.log("ADVANCE DEBUG:",debugInfo,"unsold="+unsoldDebug,"teamsNeed="+teamsNeedMore.length,"phase="+snap.phase,"idx="+snap.curIdx+"/"+safeArr(snap.queue).length);
-    if(teamsNeedMore.length===0&&unsoldDebug>0){
-      alert("BUG DETECTED: teams show full but "+unsoldDebug+" unsold exist!\n"+debugInfo);
-    }
+    // Use marqueeCount only — squad array length can be unreliable from Firebase
+    const teamsNeedMore=safeArr(snap.teams).filter(t=>t.marqueeCount<MAX_MARQUEE); // marqueeCount=0 at start, +1 each pick, max=7
 
     // All squads full → done
     if(teamsNeedMore.length===0){
@@ -1006,8 +996,7 @@ export default function App() {
   const myTeam=teamId!==null?safeArr(st.teams).find(t=>t.id===teamId):undefined;
   const canBid=useCallback((team:Team):boolean=>{
     if(st.showSold||!curPlayer||st.phase!=="running")return false;
-    if(safeArr(team.squad).length>=MAX_SQUAD)return false;
-    if(team.marqueeCount>=MAX_MARQUEE)return false;
+    if(team.marqueeCount>=MAX_MARQUEE)return false; // marqueeCount is the reliable counter
     // Price rule: first bid = base; outbidding = +10; safe floor prevents 0+10 bug
     const safeCur=Math.max(st.curBid, st.curBidder!==null?curPlayer.basePrice:0);
     const nb=st.curBidder===null
@@ -1238,7 +1227,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
       st.phase==="roundDone"?(()=>{
         const captainIds=Object.values(CAPTAIN_MAP);
         const unsoldPs=safeArr(st.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
-        const teamsNeedMore=safeArr(st.teams).filter(t=>safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE);
+        const teamsNeedMore=safeArr(st.teams).filter(t=>t.marqueeCount<MAX_MARQUEE);
         return(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             padding:"48px 24px",textAlign:"center"}}>
@@ -1413,8 +1402,8 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                         <div style={{fontSize:8,opacity:.55,marginTop:2}}>{fmt(team.purse)}</div>
                         {isLead&&<div style={{fontSize:8,color:"var(--ok)",marginTop:1}}>● LEADING</div>}
                         {skipped&&!isLead&&<div style={{fontSize:8,color:"var(--warn)",marginTop:1}}>⏭ PASSED</div>}
-                        {safeArr(team.squad).length>=MAX_SQUAD&&<div style={{fontSize:8,color:"var(--ng)",marginTop:1}}>FULL</div>}
-                        {team.purse<100&&safeArr(team.squad).length<MAX_SQUAD&&(
+                        {team.marqueeCount>=MAX_MARQUEE&&<div style={{fontSize:8,color:"var(--ng)",marginTop:1}}>FULL</div>}
+                        {team.purse<100&&team.marqueeCount<MAX_MARQUEE&&(
                           <div style={{fontSize:8,color:"var(--warn)",marginTop:2}}>💰 PURSE EMPTY</div>
                         )}
                         {safeArr(team.squad).length>=MAX_SQUAD&&(
@@ -1434,15 +1423,15 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 })}
               </div>
               {/* ── ASSIGN TO BROKE TEAM — shown when any team has < 100 pts and needs players ── */}
-              {teams.some(t=>t.purse<100&&safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE)&&(
+              {teams.some(t=>t.purse<100&&t.marqueeCount<MAX_MARQUEE)&&(
                 <div style={{marginBottom:10,background:"linear-gradient(135deg,rgba(52,211,153,.08),rgba(5,150,105,.05))",
                   border:"1px solid rgba(52,211,153,.35)",borderRadius:12,padding:"10px 12px"}}>
                   <div style={{fontSize:10,color:"#34d399",fontFamily:"'Rajdhani'",fontWeight:700,
                     letterSpacing:1,marginBottom:8,textTransform:"uppercase"}}>
                     🎁 Assign at Base Price — Team Purse Empty
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:`repeat(${teams.filter(t=>t.purse<100&&safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE).length},1fr)`,gap:6}}>
-                    {teams.filter(t=>t.purse<100&&safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE).map(team=>(
+                  <div style={{display:"grid",gridTemplateColumns:`repeat(${teams.filter(t=>t.purse<100&&t.marqueeCount<MAX_MARQUEE).length},1fr)`,gap:6}}>
+                    {teams.filter(t=>t.purse<100&&t.marqueeCount<MAX_MARQUEE).map(team=>(
                       <button key={team.id}
                         style={{padding:"10px 8px",background:"linear-gradient(135deg,rgba(52,211,153,.15),rgba(5,150,105,.2))",
                           border:"2px solid rgba(52,211,153,.5)",borderRadius:10,cursor:"pointer",
@@ -1752,7 +1741,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                 if(!cp4||st.phase!=="running")return;
                 const skipped4=[...new Set([...safeArr(st.skippedTeams),myTeam.id])];
                 const active4=safeArr(st.teams).filter((t:Team)=>
-                  safeArr(t.squad).length<MAX_SQUAD&&t.marqueeCount<MAX_MARQUEE&&
+                  t.marqueeCount<MAX_MARQUEE&&
                   t.purse>=(st.curBidder===null?cp4.basePrice:Math.max(st.curBid,cp4.basePrice)+MIN_BID)&&
                   !skipped4.includes(t.id)&&t.id!==st.curBidder
                 );
@@ -1787,7 +1776,7 @@ function CaptainView({myTeam,st,curPlayer,onBid,onSkip,onLogout,canBid,hasSkippe
                   ?"⏳ Waiting for admin to start the auction"
                   :st.showSold
                   ?"⏳ Player just sold — next coming..."
-                  :safeArr(myTeam.squad).length>=MAX_SQUAD
+                  :myTeam.marqueeCount>=MAX_MARQUEE
                   ?"✅ Squad full (8/8)"
                   :myTeam.marqueeCount>=MAX_MARQUEE
                   ?"✅ All 7 picks used"
@@ -2166,4 +2155,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — debug advance</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — marqueeCount fix</span></div></div>);}
