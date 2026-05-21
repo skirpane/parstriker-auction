@@ -1554,7 +1554,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
     {tab==="players"&&(
       <div className="pgw">
         <div style={{marginBottom:10}}><div style={{fontFamily:"'Bebas Neue'",fontSize:24,letterSpacing:2}}>Player Pool</div>
-          <div style={{fontSize:11,color:"var(--mut)"}}>{soldCount} sold · {auctionPlayers.filter(p=>p.soldTo===null).length} available · 3 captains pre-assigned</div>
+          {""}
         </div>
 
         {/* ── CAPTAINS SECTION ── */}
