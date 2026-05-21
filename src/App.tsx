@@ -940,39 +940,44 @@ export default function App() {
     const snap=await readSt();
     const captainIds=Object.values(CAPTAIN_MAP);
 
-    // Teams still needing players
-    // Use marqueeCount only — squad array length can be unreliable from Firebase
-    const teamsNeedMore=safeArr(snap.teams).filter(t=>t.marqueeCount<MAX_MARQUEE); // marqueeCount=0 at start, +1 each pick, max=7
-
-    // All squads full → done
-    if(teamsNeedMore.length===0){
-      const unsold=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id)).map(p=>p.id);
-      const log=addLog(snap,"🏆","All squads complete! Parstriker Auction done!");
-      await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:unsold});
-      return;
-    }
-
     const next=snap.curIdx+1;
 
-    // More players in current queue → advance to next player
+    // ── More players in queue → go to next ───────────────────────────────
     if(next<safeArr(snap.queue).length){
-      await update(ref(getDb(),"psAuction_v23"),{curIdx:next,curBid:0,curBidder:null,firstBidder:null,showSold:false,lastSold:null,skippedTeams:[]});
+      await update(ref(getDb(),"psAuction_v23"),{
+        curIdx:next,curBid:0,curBidder:null,firstBidder:null,
+        showSold:false,lastSold:null,skippedTeams:[]
+      });
       return;
     }
 
-    // Queue exhausted — show "Start Next Round" button to admin
-    const unsoldPlayers=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
+    // ── Queue finished — MANDATORY RULE: every team must have 7 picks ────
+    // Count how many picks each team still needs
+    const teamsNotFull=safeArr(snap.teams).filter(t=>t.marqueeCount<MAX_MARQUEE);
+    const unsoldPlayers=safeArr(snap.players)
+      .filter(p=>p.soldTo===null && !captainIds.includes(p.id));
 
-    if(unsoldPlayers.length===0){
-      const log=addLog(snap,"🏆","All players assigned! Auction complete.");
-      await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,aDone:true,phase:"done",log,lastSold:null,rotatingPool:[]});
+    // If all teams have 7 picks → auction truly complete
+    if(teamsNotFull.length===0){
+      const log=addLog(snap,"🏆","All teams have 7 players each! Auction complete!");
+      await set(ref(getDb(),"psAuction_v23"),{
+        ...snap,showSold:false,aDone:true,phase:"done",
+        log,lastSold:null,rotatingPool:unsoldPlayers.map(p=>p.id)
+      });
       return;
     }
 
-    // Go to roundDone — admin manually starts next round
-    const log=addLog(snap,"⏸️",`Round ${snap.aRound} complete. ${unsoldPlayers.length} unsold players waiting for Round ${snap.aRound+1}.`);
-    await set(ref(getDb(),"psAuction_v23"),{...snap,showSold:false,phase:"roundDone",log,lastSold:null,skippedTeams:[]});
+    // NOT all teams full — MUST continue regardless
+    // Show roundDone screen so admin can start next round
+    const needCounts=teamsNotFull.map(t=>`${t.short} needs ${MAX_MARQUEE-t.marqueeCount} more`).join(", ");
+    const log=addLog(snap,"⏸️",
+      `Round ${snap.aRound} done. Still needed: ${needCounts}. ${unsoldPlayers.length} unsold players re-enter.`
+    );
+    await set(ref(getDb(),"psAuction_v23"),{
+      ...snap,showSold:false,phase:"roundDone",log,lastSold:null,skippedTeams:[]
+    });
   };
+
   const startNextRound=async()=>{
     const snap=await readSt();
     const captainIds=Object.values(CAPTAIN_MAP);
@@ -2156,4 +2161,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — doSold readSt fix</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — mandatory 7 picks rule</span></div></div>);}
