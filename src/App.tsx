@@ -224,33 +224,7 @@ const INIT_STATE:AuctionState={
 // ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
 
 // Main Parstriker logo — cricket bat + ball wordmark style
-  <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:size*0.35,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>
-
-    {/* Outer ring */}
-    <circle cx="60" cy="60" r="57" fill="#05050e" stroke="url(#psGold)" strokeWidth="3"/>
-    <defs>
-      <linearGradient id="psGold" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#FFD700"/>
-        <stop offset="100%" stopColor="#00e5ff"/>
-      </linearGradient>
-      <linearGradient id="psBat" x1="30" y1="90" x2="90" y2="30" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#e8d5a0"/>
-        <stop offset="100%" stopColor="#fff8e0"/>
-      </linearGradient>
-    </defs>
-    {/* Cricket bat — diagonal, clean */}
-    <rect x="30" y="55" width="14" height="52" rx="7" fill="url(#psBat)" transform="rotate(-45 60 60)"/>
-    {/* Bat grip */}
-    <rect x="78" y="20" width="6" height="18" rx="3" fill="#c41e3a" transform="rotate(-45 60 60)"/>
-    {/* Ball */}
-    <circle cx="38" cy="78" r="11" fill="#c41e3a"/>
-    <path d="M31 75 Q38 70 45 75" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-    <path d="M31 81 Q38 86 45 81" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-    {/* Stars top */}
-    <text x="60" y="24" textAnchor="middle" fill="#FFD700" fontSize="10" fontFamily="Arial">★ ★ ★</text>
-    {/* PS initials */}
-    <text x="78" y="88" textAnchor="middle" fill="url(#psGold)" fontSize="22" fontFamily="'Bebas Neue',Arial" fontWeight="bold" letterSpacing="2">PS</text>
-  </svg>
+ <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:size*0.35,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>
 );
 
 // Blue Indians — bold "BI" on blue shield
