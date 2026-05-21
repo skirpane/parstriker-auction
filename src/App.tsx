@@ -1253,8 +1253,13 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
       st.aDone?<DoneScreen teams={teams} players={players} rotatingPool={safeArr(st.rotatingPool)}/>:
       st.phase==="roundDone"?(()=>{
         const captainIds=Object.values(CAPTAIN_MAP);
-        const unsoldPs=safeArr(st.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
-        const teamsNeedMore=safeArr(st.teams).filter(t=>t.marqueeCount<MAX_MARQUEE);
+        // Squad-based unsold detection — reliable regardless of Firebase array ordering
+      const allSoldIdsRD=new Set(
+        safeArr(st.teams).flatMap(t=>safeArr(t.squad).map((s:any)=>s.id))
+      );
+      const unsoldPs=safeArr(st.players)
+      .filter(p=>!captainIds.includes(p.id) && !allSoldIdsRD.has(p.id));
+      const teamsNeedMore=safeArr(st.teams).filter(t=>t.marqueeCount<MAX_MARQUEE);
         return(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             padding:"48px 24px",textAlign:"center"}}>
@@ -2200,4 +2205,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v25 — queue-based</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v26 — round-based</span></div></div>);}
