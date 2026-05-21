@@ -945,6 +945,14 @@ export default function App() {
       safeArr(t.squad).length<MAX_SQUAD && t.marqueeCount<MAX_MARQUEE
     );
 
+    // DEBUG — remove after fix
+    const debugInfo=safeArr(snap.teams).map(t=>`${t.short}:squad=${safeArr(t.squad).length},marq=${t.marqueeCount}`).join(" | ");
+    const unsoldDebug=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id)).length;
+    console.log("ADVANCE DEBUG:",debugInfo,"unsold="+unsoldDebug,"teamsNeed="+teamsNeedMore.length,"phase="+snap.phase,"idx="+snap.curIdx+"/"+safeArr(snap.queue).length);
+    if(teamsNeedMore.length===0&&unsoldDebug>0){
+      alert("BUG DETECTED: teams show full but "+unsoldDebug+" unsold exist!\n"+debugInfo);
+    }
+
     // All squads full → done
     if(teamsNeedMore.length===0){
       const unsold=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id)).map(p=>p.id);
@@ -2158,4 +2166,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — manual round start</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — debug advance</span></div></div>);}
