@@ -967,14 +967,15 @@ export default function App() {
       return;
     }
 
-    // NOT all teams full — MUST continue regardless
-    // Show roundDone screen so admin can start next round
+    // NOT all teams full — MUST show roundDone so admin can assign
     const needCounts=teamsNotFull.map(t=>`${t.short} needs ${MAX_MARQUEE-t.marqueeCount} more`).join(", ");
-    const log=addLog(snap,"⏸️",
-      `Round ${snap.aRound} done. Still needed: ${needCounts}. ${unsoldPlayers.length} unsold players re-enter.`
-    );
+    const msg=unsoldPlayers.length>0
+      ? `Round ${snap.aRound} done. ${unsoldPlayers.length} unsold players re-enter. Still needed: ${needCounts}.`
+      : `Round ${snap.aRound} done. No unsold players left — admin must assign remaining slots. ${needCounts}.`;
+    const log=addLog(snap,"⏸️",msg);
     await set(ref(getDb(),"psAuction_v23"),{
-      ...snap,showSold:false,phase:"roundDone",log,lastSold:null,skippedTeams:[]
+      ...snap,showSold:false,phase:"roundDone",log,lastSold:null,
+      skippedTeams:[],rotatingPool:unsoldPlayers.map(p=>p.id)
     });
   };
 
@@ -982,7 +983,10 @@ export default function App() {
     const snap=await readSt();
     const captainIds=Object.values(CAPTAIN_MAP);
     const unsold=safeArr(snap.players).filter(p=>p.soldTo===null&&!captainIds.includes(p.id));
-    if(unsold.length===0){alert("No unsold players!");return;}
+    if(unsold.length===0){
+      alert("No unsold players to auction. Please use the ASSIGN AT BASE buttons to complete remaining team slots.");
+      return;
+    }
     const newQueue=unsold.sort((a,b)=>b.basePrice-a.basePrice).map(p=>p.id);
     const nextRound=snap.aRound+1;
     const log=addLog(snap,"🎙️",`Round ${nextRound} started! ${newQueue.length} unsold players.`);
@@ -1289,17 +1293,35 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 </div>
               </div>
             )}
-            <button
-              style={{padding:"16px 52px",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",
-                border:"none",borderRadius:14,color:"#fff",fontFamily:"'Bebas Neue'",
-                fontSize:26,letterSpacing:4,cursor:"pointer",
-                boxShadow:"0 4px 24px rgba(124,58,237,.5)",marginTop:8}}
-              onClick={onNextRound}>
-              ▶ START ROUND {st.aRound+1}&nbsp;&nbsp;({unsoldPs.length} PLAYERS)
-            </button>
-            <div style={{marginTop:12,fontSize:11,color:"var(--mut)"}}>
-              All sold players are locked in their teams · Only unsold players re-enter
-            </div>
+            {unsoldPs.length>0?(
+              <>
+                <button
+                  style={{padding:"16px 52px",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",
+                    border:"none",borderRadius:14,color:"#fff",fontFamily:"'Bebas Neue'",
+                    fontSize:26,letterSpacing:4,cursor:"pointer",
+                    boxShadow:"0 4px 24px rgba(124,58,237,.5)",marginTop:8}}
+                  onClick={onNextRound}>
+                  ▶ START ROUND {st.aRound+1}&nbsp;&nbsp;({unsoldPs.length} PLAYERS)
+                </button>
+                <div style={{marginTop:12,fontSize:11,color:"var(--mut)"}}>
+                  All sold players are locked · Only unsold players re-enter
+                </div>
+              </>
+            ):(
+              <div style={{marginTop:8,padding:"16px 24px",
+                background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.3)",
+                borderRadius:12,maxWidth:500,textAlign:"center"}}>
+                <div style={{fontSize:18,color:"var(--gold)",fontWeight:700,marginBottom:8}}>
+                  ⚠️ All players were sold — no unsold pool
+                </div>
+                <div style={{fontSize:12,color:"var(--mut)",lineHeight:2}}>
+                  Every player was claimed by a team.<br/>
+                  Teams still needing players must be assigned using the<br/>
+                  <strong style={{color:"#34d399",fontSize:13}}>🎁 ASSIGN AT BASE</strong> buttons above.<br/>
+                  Click the button for each team that still needs picks.
+                </div>
+              </div>
+            )}
             <div style={{marginTop:24,width:"100%"}}><AdminTeamCards teams={teams}/></div>
             <Footer/>
           </div>
@@ -2161,4 +2183,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — mandatory 7 picks rule</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — handle 0 unsold case</span></div></div>);}
