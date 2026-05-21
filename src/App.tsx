@@ -225,7 +225,6 @@ const INIT_STATE:AuctionState={
 
 // Main Parstriker logo — cricket bat + ball wordmark style
  <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:size*0.35,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>
-);
 
 // Blue Indians — bold "BI" on blue shield
 const LogoBI=({size=48}:{size?:number})=>(
