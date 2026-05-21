@@ -224,9 +224,8 @@ const INIT_STATE:AuctionState={
 // ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
 
 // Main Parstriker logo — cricket bat + ball wordmark style
-    const LogoParstriker=({size=48}:{size?:number})=>(
-        <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:size*0.35,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>
-      );
+  <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:size*0.35,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>
+
     {/* Outer ring */}
     <circle cx="60" cy="60" r="57" fill="#05050e" stroke="url(#psGold)" strokeWidth="3"/>
     <defs>
