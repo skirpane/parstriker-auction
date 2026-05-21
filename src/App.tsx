@@ -1371,7 +1371,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
             <div className="rbt">{st.aRound===0?"PARSTRIKER AUCTION":`ROUND ${st.aRound+1} OF ${TOTAL_ROUNDS}`}</div>
             <div className="rbd">
               {st.aRound===0
-                ?`${auctionPlayers.length} players · All at ${fmt(100)} base · ${TOTAL_ROUNDS} rounds · ${fmt(PURSE)} budget each`
+                ?`${auctionPlayers.length} players · All at ${fmt(100)} base · ${fmt(PURSE)} budget each`
                 :<>
                   <strong style={{color:"var(--gold)"}}>{auctionPlayers.filter(p=>p.soldTo===null).length} unsold players</strong> re-enter the auction<br/>
                   Teams still need players — bidding continues!<br/>
@@ -1424,7 +1424,7 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
                 <div className="bb">
                   <div className="bl">{st.curBidder!==null?"🔥 Current Bid":"🎯 Opening Price — First Bid = Base"}</div>
                   <div className="ba">{fmt(st.curBidder!==null?Math.max(st.curBid,curPlayer?.basePrice??100):curPlayer?.basePrice??100)}</div>
-                  <div className="bs">+{fmt(MIN_BID)} per raise · min bid: {fmt(curPlayer.basePrice)}</div>
+                  <div className="bs">+{fmt(MIN_BID)} pts per raise</div>
                   {leadTeam&&<div className="bldr" style={{color:leadTeam.color}}>🔥 {leadTeam.name} leading</div>}
                 </div>
               </div>
