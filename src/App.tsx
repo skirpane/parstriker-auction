@@ -887,18 +887,19 @@ export default function App() {
   };
 
   const doSold=async()=>{
-    const snap=st; // use local state
+    const snap=await readSt(); // MUST use fresh state — marqueeCount must be accurate
     if(snap.curBidder===null)return;
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp)return;
     const team=safeArr(snap.teams).find(t=>t.id===snap.curBidder);
     if(!team)return;
-    const sp:SquadPlayer={...cp,soldPrice:snap.curBid,isMarquee:true,round:snap.aRound};
+    const soldPrice=Math.max(snap.curBid, cp.basePrice); // safety: never below base
+    const sp:SquadPlayer={...cp,soldPrice,isMarquee:true,round:snap.aRound};
     const newTeams=safeArr(snap.teams).map(t=>t.id===snap.curBidder
-      ?{...t,purse:t.purse-snap.curBid,squad:[...safeArr(t.squad),sp],marqueeCount:t.marqueeCount+1}:t);
-    const newPlayers=safeArr(snap.players).map(p=>p.id===cp.id?{...p,soldTo:snap.curBidder,soldPrice:snap.curBid,round:snap.aRound}:p);
-    const log=addLog(snap,"🔨",`SOLD! ${cp.name} → ${team.short} for ${fmt(snap.curBid)}`);
-    const lastSold={playerName:cp.name,teamName:team.name,teamColor:team.color,teamId:team.id,price:snap.curBid};
+      ?{...t,purse:t.purse-soldPrice,squad:[...safeArr(t.squad),sp],marqueeCount:t.marqueeCount+1}:t);
+    const newPlayers=safeArr(snap.players).map(p=>p.id===cp.id?{...p,soldTo:snap.curBidder,soldPrice,round:snap.aRound}:p);
+    const log=addLog(snap,"🔨",`SOLD! ${cp.name} → ${team.short} for ${fmt(soldPrice)}`);
+    const lastSold={playerName:cp.name,teamName:team.name,teamColor:team.color,teamId:team.id,price:soldPrice};
     // Captain celebration: if the winning captain is viewing this session
     const winnerTeam=newTeams.find(t=>t.id===snap.curBidder);
     if(teamId===snap.curBidder&&winnerTeam){
@@ -909,7 +910,7 @@ export default function App() {
   };
 
   const doUnsold=async()=>{
-    const snap=st; // use local state
+    const snap=await readSt(); // fresh state
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp)return;
     const log=addLog(snap,"❌",`${cp.name} UNSOLD`);
@@ -919,7 +920,7 @@ export default function App() {
 
   // Assign current player to a broke team at base price (0 pts deducted)
   const doAssignFree=async(teamId:number)=>{
-    const snap=st;
+    const snap=await readSt(); // fresh state
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp||snap.phase!=="running")return;
     const team=safeArr(snap.teams).find(t=>t.id===teamId);
@@ -2155,4 +2156,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — marqueeCount fix</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — doSold readSt fix</span></div></div>);}
