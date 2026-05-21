@@ -224,8 +224,10 @@ const INIT_STATE:AuctionState={
 // ─── LOGOS (clean icon-based) ─────────────────────────────────────────────────
 
 // Main Parstriker logo — cricket bat + ball wordmark style
- <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:size*0.35,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>
-
+const LogoParstriker=({size=48}:{size?:number})=>{
+  const fs=Math.round(size*0.35);
+  return <div style={{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:fs,color:"#fff",fontWeight:900,letterSpacing:1,flexShrink:0}}>PS</div>;
+};
 // Blue Indians — bold "BI" on blue shield
 const LogoBI=({size=48}:{size?:number})=>(
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
