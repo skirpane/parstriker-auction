@@ -959,12 +959,20 @@ export default function App() {
     // ── Queue finished — MANDATORY RULE: every team must have 7 picks ────
     // Count how many picks each team still needs
     const teamsNotFull=safeArr(snap.teams).filter(t=>t.marqueeCount<MAX_MARQUEE);
-    // Count unsold by checking squad membership — 100% reliable
+   
+    // Reliable unsold count: players processed in queue but not in any squad
     const allSoldIds=new Set(
-      safeArr(snap.teams).flatMap(t=>safeArr(t.squad).map(s=>s.id))
+      safeArr(snap.teams).flatMap(t=>safeArr(t.squad).map((s:any)=>s.id))
     );
+    const soldInSquads=safeArr(snap.teams).reduce((sum,t)=>
+      sum+safeArr(t.squad).filter((s:any)=>!captainIds.includes(s.id)).length,0
+    );
+    const processedIds=safeArr(snap.queue).slice(0,snap.curIdx+1);
     const unsoldPlayers=safeArr(snap.players)
-      .filter(p=>!captainIds.includes(p.id) && !allSoldIds.has(p.id));
+      .filter(p=>!captainIds.includes(p.id)
+        && processedIds.includes(p.id)
+        && !allSoldIds.has(p.id));
+    console.log(`ADVANCE: processed=${processedIds.length} soldInSquads=${soldInSquads} unsold=${unsoldPlayers.length} teamsNotFull=${teamsNotFull.length}`);
 
     // If all teams have 7 picks → auction truly complete
     if(teamsNotFull.length===0){
@@ -2192,4 +2200,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v24 — squad-based</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v25 — queue-based</span></div></div>);}
