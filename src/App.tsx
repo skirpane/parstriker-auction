@@ -75,7 +75,7 @@ const verifyPass=async(attempt:string,role:"admin"|"bi"|"rk"|"ww"):Promise<boole
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type Role="login"|"admin"|"captain"|"viewer";
-type Phase="banner"|"running"|"done";
+type Phase="banner"|"running"|"roundDone"|"done";
 interface Player{id:number;name:string;role:string;tier:string;country:string;img:string;basePrice:number;soldTo:number|null;soldPrice:number|null;round:number|null;isCaptain?:boolean;chUrl?:string;}
 interface SquadPlayer extends Player{soldPrice:number;isMarquee:boolean;round:number;isCaptain?:boolean;}
 interface Team{id:number;name:string;short:string;color:string;accent:string;purse:number;squad:SquadPlayer[];marqueeCount:number;captainPlayerId:number;}
@@ -910,12 +910,17 @@ export default function App() {
   };
 
   const doUnsold=async()=>{
-    const snap=await readSt(); // fresh state
+    const snap=await readSt();
     const cp=safeArr(snap.players).find(p=>p.id===safeArr(snap.queue)[snap.curIdx]);
     if(!cp)return;
+    const newPlayers=safeArr(snap.players).map(p=>
+      p.id===cp.id?{...p,soldTo:null,soldPrice:null,round:null}:p
+    );
     const log=addLog(snap,"❌",`${cp.name} UNSOLD`);
-    await update(ref(getDb(),"psAuction_v23"),{log,lastSold:null,firstBidder:null,showSold:false});
-    advance();
+    await set(ref(getDb(),"psAuction_v23"),{
+      ...snap,players:newPlayers,log,lastSold:null,firstBidder:null,showSold:false
+    });
+    setTimeout(()=>advance(),600);
   };
 
   // Assign current player to a broke team at base price (0 pts deducted)
@@ -1265,14 +1270,14 @@ function AdminView({st,curPlayer,leadTeam,soldCount,progPct,onBid,onSold,onUnsol
               ))}
             </div>
             {/* Broke teams — assign at base */}
-            {teamsNeedMore.filter(t=>t.purse<100).length>0&&(
+            {teamsNeedMore.length>0&&unsoldPs.length>0&&(
               <div style={{marginBottom:24,padding:"14px 20px",background:"rgba(52,211,153,.07)",
                 border:"1px solid rgba(52,211,153,.3)",borderRadius:12,maxWidth:440,width:"100%"}}>
                 <div style={{fontSize:12,color:"#34d399",marginBottom:10,fontWeight:700,letterSpacing:1}}>
-                  🎁 PURSE EMPTY — Assign player to broke team first
+                 🎁 ASSIGN TO TEAM — assign next unsold player at base price
                 </div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
-                  {teamsNeedMore.filter(t=>t.purse<100).map(t=>(
+                  {teamsNeedMore.map(t=>(
                     <button key={t.id}
                       style={{padding:"9px 18px",background:"rgba(52,211,153,.18)",
                         border:"2px solid rgba(52,211,153,.5)",borderRadius:9,
@@ -2183,4 +2188,4 @@ function DoneScreen({teams,players,rotatingPool}:{teams:Team[];players:Player[];
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
-function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v23 — handle 0 unsold case</span></div></div>);}
+function Footer(){return(<div className="ps-footer"><div className="ps-footer-txt">© 2026 <span>SKIRPANE</span> · All Rights Reserved · <span style={{color:"rgba(139,92,246,.5)",fontSize:10}}>v24 — unsold count fix</span></div></div>);}
